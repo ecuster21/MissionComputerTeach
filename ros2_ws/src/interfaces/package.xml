@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>interfaces</name>
+  <version>0.0.1</version>
+  <description>Custom message interfaces for telemetry and telecommand frames.</description>
+  <maintainer email="user@example.com">User</maintainer>
+  <license>Apache-2.0</license>
+
+  <!-- 使用 ament_cmake 构建该接口包。 -->
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <!-- 为 SyncedFrame.msg 生成 C/C++/Python 等语言的消息代码。 -->
+  <build_depend>rosidl_default_generators</build_depend>
+  <!-- 在运行时提供生成后的接口定义。 -->
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <!-- 声明该包属于 ROS 接口包。 -->
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
+  <!-- ROS 2 包常用的静态检查依赖。 -->
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

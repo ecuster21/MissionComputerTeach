@@ -1,0 +1,16 @@
+{
+  "names": {
+    "interfaces": {
+      "cmake-args": [
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+      ]
+    },
+    "telemetry_telecommand": {
+      "cmake-args": [
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+      ]
+    }
+  }
+}
