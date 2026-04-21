@@ -1,35 +1,29 @@
 # MissionComputer
 
-基于 ROS 2 Jazzy 的遥测遥控串口处理示例工程，包含：
+`MissionComputer` 是一个基于 ROS 2 Jazzy 的串口接收工程，用于从真实串口读取固定长度二进制帧，完成帧同步与 CRC16 校验，并将有效帧发布为 ROS 2 消息供下游使用。
 
-- `interfaces`：自定义消息 `SyncedFrame`
-- `telemetry_telecommand`：串口接收、帧同步、模拟发送、帧可视化
+当前项目只保留两个可执行程序：
 
-当前仓库已经按需求文档落地为完整工作区 `ros2_ws`，并在本地完成过一次 `colcon build` 验证。
+- `serial_receiver`：从真实串口读取字节流，完成帧同步、CRC 校验并发布 ROS 2 消息
+- `frame_visualizer`：订阅接收结果并以十六进制打印完整帧
 
-## 目录结构
+项目内已经不再包含模拟发送器、虚拟串口脚本或串口仿真节点。
 
-```text
-MissionComputer/
-├── README.md
-├── ros2_ws
-│   ├── src
-│   │   ├── interfaces
-│   │   └── telemetry_telecommand
-│   └── colcon.meta
-└── 一、项目结构设计.md
-```
+## 项目结构
+
+- `ros2_ws/`：ROS 2 工作区
+- `ros2_ws/src/interfaces`：自定义消息定义
+- `ros2_ws/src/telemetry_telecommand`：串口接收与可视化节点实现
+- `docs/`：专题说明文档、流程图、提示词等资料
+- `Log.md`：每次收尾的工作记录
+- `Memory.md`：长期有效规则与固定工作流
 
 ## 环境要求
 
-- Ubuntu + ROS 2 Jazzy
+- Ubuntu
+- ROS 2 Jazzy
 - `colcon`
-- 可访问的串口设备，例如 `/dev/ttyUSB0`
-
-可选工具：
-
-- `socat`
-  用于创建虚拟串口对，方便无实体设备时联调
+- 可访问的真实串口设备，例如 `/dev/ttyS7`
 
 ## 构建
 
@@ -37,47 +31,23 @@ MissionComputer/
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 colcon build --packages-select interfaces telemetry_telecommand
+source install/setup.bash
 ```
 
-为了让 VS Code 或 Cursor 的 `Ctrl + 左键` 正常跳转到定义，建议按当前仓库自带的 `colcon.meta` 重新构建一次。该配置已经打开 `compile_commands.json` 导出，供 C/C++ 语言服务读取。
+## 运行
 
-构建完成后：
+终端 1：启动真实硬件发送端或你的上位机程序，确保它已经持续向目标串口发送协议帧。
+
+终端 2：启动接收节点。
 
 ```bash
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
+ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p crc16_variant:=ibm -p crc16_big_endian:=true -p topic:=synced_frame
 ```
 
-如果你使用的是 VS Code / Cursor，首次打开工作区后建议安装工作区推荐插件：
-
-- `ms-vscode.cpptools`
-- `ms-vscode.cmake-tools`
-- `ms-iot.vscode-ros`
-
-安装后执行一次上面的构建命令，再重新加载编辑器窗口，`Ctrl + 左键` 一般就会恢复。
-
-## 真实串口运行
-
-终端 1，运行模拟发送器或你自己的上位机发送端：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand mock_serial_sender /dev/ttyS7 115200
-```
-
-终端 2，启动串口接收节点：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p topic:=synced_frame
-```
-
-终端 3，启动可视化节点：
+终端 3：启动可视化节点。
 
 ```bash
 cd /home/zkxt/MissionComputer/ros2_ws
@@ -86,109 +56,105 @@ source install/setup.bash
 ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=synced_frame
 ```
 
-如果串口权限不足，可执行：
+如果串口权限不足：
 
 ```bash
 sudo usermod -aG dialout $USER
 ```
 
-然后重新登录会话。
+重新登录后再试。
 
-## 虚拟串口联调
+## 当前协议
 
-如果手头没有实体串口，推荐先使用 `socat` 创建一对互联的伪终端。
+当前代码里的帧定义如下：
 
-终端 1，创建虚拟串口对：
+- 帧头：`0xEB 0x90`
+- 总长度：`64` 字节
+- 数据区：`60` 字节
+- CRC：`2` 字节
 
-```bash
-cd /home/zkxt/MissionComputer
-./tools/create_virtual_serial_pair.sh
+即：
+
+```text
+EB 90 + 60字节数据 + 2字节CRC16
 ```
 
-默认会创建：
+接收节点当前支持这些 CRC16 变体：
 
-- `/tmp/ttyMCU`
-- `/tmp/ttyHOST`
+- `ccitt_false`
+- `modbus`
+- `ibm`
+- `x25`
 
-终端 2，向其中一端发送模拟帧：
+当前硬件联调示例使用：
 
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand mock_serial_sender /tmp/ttyMCU 115200
-```
+- `crc16_variant:=ibm`
+- `crc16_big_endian:=true`
 
-终端 3，启动串口接收节点：
+## 参数
 
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/tmp/ttyHOST -p baud_rate:=115200 -p timeout_ms:=100 -p topic:=synced_frame
-```
+`serial_receiver` 支持：
 
-终端 4，启动可视化节点：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=synced_frame
-```
-
-## 数据帧说明
-
-- 帧长固定为 `64` 字节
-- 帧头固定为 `0xEB 0x90`
-- 最后 1 字节为校验和
-- 中间 `61` 字节数据内容由发送端按 `00` 到 `FF` 循环递增填充
-- 校验和算法为前 `63` 字节的 8 位累加和
-
-ROS 2 话题：
-
-- 话题名默认 `synced_frame`
-- 消息类型 `interfaces/msg/SyncedFrame`
-
-## 运行参数
-
-`serial_receiver` 支持以下参数：
-
-- `port`：串口设备路径，默认 `/dev/ttyUSB0`
+- `port`：串口路径，默认 `/dev/ttyS7`
 - `baud_rate`：波特率，默认 `115200`
-- `timeout_ms`：串口读超时，默认 `100`
-- `topic`：发布话题名，默认 `synced_frame`
+- `timeout_ms`：读超时，默认 `100`
+- `crc16_variant`：CRC16 变体，默认 `ccitt_false`
+- `crc16_big_endian`：CRC 字节序，默认 `true`
+- `topic`：发布话题，默认 `synced_frame`
 
-`frame_visualizer` 支持以下参数：
+`frame_visualizer` 支持：
 
-- `topic`：订阅话题名，默认 `synced_frame`
+- `topic`：订阅话题，默认 `synced_frame`
 
-启动方式：
+## 发布消息
 
-- `ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyUSB0 -p baud_rate:=115200 -p timeout_ms:=100 -p topic:=synced_frame`
-- `ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=synced_frame`
+- 话题默认名：`/synced_frame`
+- 消息类型：`interfaces/msg/SyncedFrame`
+- `frame_data`：原始 `64` 字节完整帧
+- `timestamp_ns`：本地接收时间戳，单位纳秒
+
+## 文档维护约定
+
+- `README.md`：维护项目入口信息、结构概览、运行方式和关键说明
+- `Log.md`：每次收尾都追加记录，写清楚“做了什么 / 改了哪些文件 / 下一步做什么”
+- `Memory.md`：只记录长期有效内容，例如用户偏好、命名规范、固定工作流
+- `docs/`：存放专题说明、设计记录、流程图、提示词和补充文档
+
+如果项目结构、运行方式、串口协议、调试流程发生变化，应同步更新这些文档。
+
+## 相关文档
+
+- [docs/README.md](/home/zkxt/MissionComputer/docs/README.md)
+- [docs/codex_start_prompt.md](/home/zkxt/MissionComputer/docs/codex_start_prompt.md)
+- [docs/frame_sync/README.md](/home/zkxt/MissionComputer/docs/frame_sync/README.md)
+- [Log.md](/home/zkxt/MissionComputer/Log.md)
+- [Memory.md](/home/zkxt/MissionComputer/Memory.md)
+
+## 常见问题
+
+如果日志显示：
+
+```text
+Frame synchronization established.
+Frame validation failed.
+```
+
+通常表示：
+
+- 帧头和帧长已经对上了
+- 但 `crc16_variant` 或 `crc16_big_endian` 配置不对
+
+当前接收节点会在校验失败时打印：
+
+- 当前使用的 CRC 配置
+- 收到的 CRC 大端/小端解释值
+- 多种 CRC16 计算结果
+- 原始 `64` 字节帧内容
+
+可以根据这条日志快速判断应该切换到哪一种 CRC 参数。
 
 ## 实现说明
 
-项目中的串口访问使用仓库内置的 POSIX `termios` 实现，而不是第三方 `serial` CMake 包。这样做的原因是当前环境里没有可直接被 `find_package(serial)` 找到的开发包，但整体功能与需求文档保持一致。
-
-## 常用命令
-
-查看当前已注册的话题：
-
-```bash
-ros2 topic list
-```
-
-查看消息内容：
-
-```bash
-ros2 topic echo /synced_frame
-```
-
-## 后续可扩展项
-
-- 增加单元测试和集成测试
-- 增加 CRC/更严格的协议字段解析
-- 接入真实遥测遥控协议字段定义
-- 增加录包与回放能力
+- 串口底层使用仓库内置的 POSIX `termios` 封装
+- 接收线程采用“搜索双帧头建立同步 -> 固定帧长取帧 -> 校验失败重同步”的方式工作
+- 校验通过的完整帧会发布到 ROS 2 话题

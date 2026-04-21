@@ -1,0 +1,8 @@
+flowchart TB
+    A[read_exact 得到 64 字节 frame] --> B{帧头或 CRC16 校验失败?}
+    B -- 否 --> C[正常发布并继续]
+    B -- 是 --> D[打印详细 CRC 诊断日志]
+    D --> E[把这 64 字节复制回搜索缓冲区]
+    E --> F[bytes_in_buffer = FRAME_LENGTH]
+    F --> G[is_synced = false]
+    G --> H[返回外层循环重新搜索同步点]
