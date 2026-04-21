@@ -15,7 +15,7 @@ find_package(ament_cmake REQUIRED)
 find_package(interfaces REQUIRED)
 find_package(rclcpp REQUIRED)
 
-# 发送端和接收端共用的串口实现库。
+# 串口节点使用的 POSIX 串口实现库。
 add_library(serial_support
   src/posix_serial_port.cpp
 )
@@ -37,16 +37,6 @@ ament_target_dependencies(serial_receiver
 )
 target_link_libraries(serial_receiver serial_support)
 
-# 持续向串口发送协议帧的测试发送程序。
-add_executable(mock_serial_sender
-  src/mock_serial_sender.cpp
-)
-target_include_directories(mock_serial_sender
-  PRIVATE
-    include
-)
-target_link_libraries(mock_serial_sender serial_support)
-
 # 以十六进制形式打印接收帧的调试工具。
 add_executable(frame_visualizer
   src/frame_visualizer.cpp
@@ -63,7 +53,6 @@ ament_target_dependencies(frame_visualizer
 install(TARGETS
   serial_support
   serial_receiver
-  mock_serial_sender
   frame_visualizer
   DESTINATION lib/${PROJECT_NAME}
 )

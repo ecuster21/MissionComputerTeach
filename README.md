@@ -3,7 +3,7 @@
 基于 ROS 2 Jazzy 的遥测遥控串口处理示例工程，包含：
 
 - `interfaces`：自定义消息 `SyncedFrame`
-- `telemetry_telecommand`：串口接收、帧同步、模拟发送、帧可视化
+- `telemetry_telecommand`：串口接收、帧同步、帧可视化
 
 当前仓库已经按需求文档落地为完整工作区 `ros2_ws`，并在本地完成过一次 `colcon build` 验证。
 
@@ -25,11 +25,6 @@ MissionComputer/
 - Ubuntu + ROS 2 Jazzy
 - `colcon`
 - 可访问的串口设备，例如 `/dev/ttyUSB0`
-
-可选工具：
-
-- `socat`
-  用于创建虚拟串口对，方便无实体设备时联调
 
 ## 构建
 
@@ -59,14 +54,7 @@ source install/setup.bash
 
 ## 真实串口运行
 
-终端 1，运行模拟发送器或你自己的上位机发送端：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand mock_serial_sender /dev/ttyUSB0 115200
-```
+终端 1，启动你的真实硬件发送端或上位机，确保它已经开始持续向目标串口发送协议帧。
 
 终端 2，启动串口接收节点：
 
@@ -74,7 +62,7 @@ ros2 run telemetry_telecommand mock_serial_sender /dev/ttyUSB0 115200
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyUSB0 -p baud_rate:=115200 -p timeout_ms:=100 -p topic:=synced_frame
+ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p crc16_variant:=ibm -p crc16_big_endian:=true -p topic:=synced_frame
 ```
 
 终端 3，启动可视化节点：
@@ -94,56 +82,15 @@ sudo usermod -aG dialout $USER
 
 然后重新登录会话。
 
-## 虚拟串口联调
-
-如果手头没有实体串口，推荐先使用 `socat` 创建一对互联的伪终端。
-
-终端 1，创建虚拟串口对：
-
-```bash
-cd /home/zkxt/MissionComputer
-./tools/create_virtual_serial_pair.sh
-```
-
-默认会创建：
-
-- `/tmp/ttyMCU`
-- `/tmp/ttyHOST`
-
-终端 2，向其中一端发送模拟帧：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand mock_serial_sender /tmp/ttyMCU 115200
-```
-
-终端 3，启动串口接收节点：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/tmp/ttyHOST -p baud_rate:=115200 -p timeout_ms:=100 -p topic:=synced_frame
-```
-
-终端 4，启动可视化节点：
-
-```bash
-cd /home/zkxt/MissionComputer/ros2_ws
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=synced_frame
-```
-
 ## 数据帧说明
 
 - 帧长固定为 `64` 字节
 - 帧头固定为 `0xEB 0x90`
-- 最后 1 字节为校验和
-- 中间 `61` 字节数据内容由发送端按 `00` 到 `FF` 循环递增填充
-- 校验和算法为前 `63` 字节的 8 位累加和
+- 中间 `60` 字节为数据区
+- 最后 `2` 字节为 `CRC16`
+- 当前真实硬件联调示例使用 `CRC16/IBM`
+- 当前真实硬件联调示例按大端序发送和校验 `CRC16`
+- 如果设备协议不同，可通过 `serial_receiver` 参数切换 CRC16 变体和字节序
 
 ROS 2 话题：
 
@@ -157,6 +104,8 @@ ROS 2 话题：
 - `port`：串口设备路径，默认 `/dev/ttyUSB0`
 - `baud_rate`：波特率，默认 `115200`
 - `timeout_ms`：串口读超时，默认 `100`
+- `crc16_variant`：CRC16 变体，默认 `ccitt_false`
+- `crc16_big_endian`：CRC16 字节序，默认 `true`
 - `topic`：发布话题名，默认 `synced_frame`
 
 `frame_visualizer` 支持以下参数：
@@ -165,7 +114,7 @@ ROS 2 话题：
 
 启动方式：
 
-- `ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyUSB0 -p baud_rate:=115200 -p timeout_ms:=100 -p topic:=synced_frame`
+- `ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p crc16_variant:=ibm -p crc16_big_endian:=true -p topic:=synced_frame`
 - `ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=synced_frame`
 
 ## 实现说明
@@ -189,6 +138,6 @@ ros2 topic echo /synced_frame
 ## 后续可扩展项
 
 - 增加单元测试和集成测试
-- 增加 CRC/更严格的协议字段解析
+- 支持更多真实设备协议字段解析
 - 接入真实遥测遥控协议字段定义
 - 增加录包与回放能力
