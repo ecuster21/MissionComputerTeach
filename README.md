@@ -1,29 +1,21 @@
 # MissionComputer
 
-`MissionComputer` 是一个基于 ROS 2 Jazzy 的串口接收工程，用于从真实串口读取固定长度二进制帧，完成帧同步与 CRC8 校验，并将有效帧发布为 ROS 2 消息供下游使用。
+基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点，以及 1 个用于整套联调的一键启动文件：
 
-当前项目只保留两个可执行程序：
+- `tm_serial_recv`：默认接收 `/dev/ttyS7`，固定 `64` 字节帧
+- `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，固定 `32` 字节帧
+- `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，固定 `32` 字节帧
+- `frame_visualizer`：订阅接收到的完整帧并以十六进制打印
+- `multi_serial_visualizers.launch.py`：同时启动 3 个串口接收节点和 3 个对应的可视化节点
 
-- `serial_receiver`：从真实串口读取字节流，完成帧同步、CRC 校验并发布 ROS 2 消息
-- `frame_visualizer`：订阅接收结果并以十六进制打印完整帧
-
-项目内已经不再包含模拟发送器、虚拟串口脚本或串口仿真节点。
-
-## 项目结构
-
-- `ros2_ws/`：ROS 2 工作区
-- `ros2_ws/src/interfaces`：自定义消息定义
-- `ros2_ws/src/telemetry_telecommand`：串口接收与可视化节点实现
-- `docs/`：专题说明文档、流程图、提示词等资料
-- `Log.md`：每次收尾的工作记录
-- `Memory.md`：长期有效规则与固定工作流
+这 3 个接收节点共用同一套串口同步与 CRC8 校验逻辑，只是默认串口、默认帧长和默认发布话题不同。
 
 ## 环境要求
 
 - Ubuntu
 - ROS 2 Jazzy
 - `colcon`
-- 可访问的真实串口设备，例如 `/dev/ttyS7`
+- 可访问的真实串口设备，例如 `/dev/ttyS7`、`/dev/ttyS3`、`/dev/ttyS4`
 
 ## 构建
 
@@ -34,26 +26,107 @@ colcon build --packages-select interfaces telemetry_telecommand
 source install/setup.bash
 ```
 
+## 当前协议
+
+所有接收节点都按下面这套协议做同步与校验：
+
+- 帧头固定：`0xEB 0x90`
+- 校验类型：`CRC8`
+- 支持的 CRC8 变体：
+  - `crc8`
+  - `maxim`
+  - `sae_j1850`
+
+不同节点的默认帧长：
+
+- `tm_serial_recv`：`64` 字节
+- `c_tc_serial_recv`：`32` 字节
+- `l_tc_serial_recv`：`32` 字节
+
+因此：
+
+- `tm_serial_recv` 的默认帧结构是 `EB 90 + 61字节数据 + 1字节CRC8`
+- `c_tc_serial_recv` 和 `l_tc_serial_recv` 的默认帧结构是 `EB 90 + 29字节数据 + 1字节CRC8`
+
 ## 运行
 
-终端 1：启动真实硬件发送端或你的上位机程序，确保它已经持续向目标串口发送协议帧。
+推荐直接使用 launch 文件一次启动 3 路串口接收和 3 路显示。
 
-终端 2：启动接收节点。
+### 一键启动
 
 ```bash
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p crc8_variant:=crc8 -p topic:=synced_frame
+ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py
 ```
 
-终端 3：启动可视化节点。
+这个 launch 会同时启动：
+
+- `tm_serial_recv`，默认读取 `/dev/ttyS7`
+- `c_tc_serial_recv`，默认读取 `/dev/ttyS3`
+- `l_tc_serial_recv`，默认读取 `/dev/ttyS4`
+- `tm_frame_visualizer`，订阅 `tm_synced_frame`
+- `c_tc_frame_visualizer`，订阅 `c_tc_synced_frame`
+- `l_tc_frame_visualizer`，订阅 `l_tc_synced_frame`
+
+如果需要改串口或公共参数，可以直接覆盖 launch 参数：
 
 ```bash
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=synced_frame
+ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py \
+  tm_port:=/dev/ttyS7 \
+  c_tc_port:=/dev/ttyS3 \
+  l_tc_port:=/dev/ttyS4 \
+  baud_rate:=115200 \
+  timeout_ms:=100 \
+  crc8_variant:=crc8
+```
+
+### 手动分别启动
+
+终端 1：启动真实硬件发送端或上位机程序，确保目标串口已经持续发数。
+
+终端 2：按需启动接收节点。
+
+`tm_serial_recv`
+
+```bash
+cd /home/zkxt/MissionComputer/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run telemetry_telecommand tm_serial_recv
+```
+
+`c_tc_serial_recv`
+
+```bash
+cd /home/zkxt/MissionComputer/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run telemetry_telecommand c_tc_serial_recv
+```
+
+`l_tc_serial_recv`
+
+```bash
+cd /home/zkxt/MissionComputer/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run telemetry_telecommand l_tc_serial_recv
+```
+
+终端 3：启动可视化节点，并指定要看的话题。
+
+例如查看 `tm_serial_recv`：
+
+```bash
+cd /home/zkxt/MissionComputer/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=tm_synced_frame
 ```
 
 如果串口权限不足：
@@ -64,73 +137,55 @@ sudo usermod -aG dialout $USER
 
 重新登录后再试。
 
-## 当前协议
+## 默认参数
 
-当前代码里的帧定义如下：
+`tm_serial_recv`
 
-- 帧头：`0xEB 0x90`
-- 总长度：`64` 字节
-- 数据区：`61` 字节
-- CRC：`1` 字节
+- `port`：`/dev/ttyS7`
+- `frame_length`：`64`
+- `crc8_variant`：`crc8`
+- `topic`：`tm_synced_frame`
 
-即：
+`c_tc_serial_recv`
 
-```text
-EB 90 + 61字节数据 + 1字节CRC8
-```
+- `port`：`/dev/ttyS3`
+- `frame_length`：`32`
+- `crc8_variant`：`crc8`
+- `topic`：`c_tc_synced_frame`
 
-接收节点当前支持这些 CRC8 变体：
+`l_tc_serial_recv`
 
-- `crc8`
-- `maxim`
-- `sae_j1850`
+- `port`：`/dev/ttyS4`
+- `frame_length`：`32`
+- `crc8_variant`：`crc8`
+- `topic`：`l_tc_synced_frame`
 
-当前实现默认使用：
+3 个接收节点都还支持：
 
-- `crc8_variant:=crc8`
-
-说明：
-
-- CRC8 只有 `1` 字节，不存在多字节大小端问题
-- 因此项目里不再保留 CRC 字节序参数
-
-## 参数
-
-`serial_receiver` 支持：
-
-- `port`：串口路径，默认 `/dev/ttyS7`
-- `baud_rate`：波特率，默认 `115200`
-- `timeout_ms`：读超时，默认 `100`
-- `crc8_variant`：CRC8 变体，默认 `crc8`
-- `topic`：发布话题，默认 `synced_frame`
+- `baud_rate`：默认 `115200`
+- `timeout_ms`：默认 `100`
 
 `frame_visualizer` 支持：
 
-- `topic`：订阅话题，默认 `synced_frame`
+- `topic`：订阅话题名，默认 `tm_synced_frame`
+
+`multi_serial_visualizers.launch.py` 支持：
+
+- `tm_port`：默认 `/dev/ttyS7`
+- `c_tc_port`：默认 `/dev/ttyS3`
+- `l_tc_port`：默认 `/dev/ttyS4`
+- `baud_rate`：默认 `115200`
+- `timeout_ms`：默认 `100`
+- `crc8_variant`：默认 `crc8`
 
 ## 发布消息
 
-- 话题默认名：`/synced_frame`
-- 消息类型：`interfaces/msg/SyncedFrame`
-- `frame_data`：原始 `64` 字节完整帧
+消息类型：`interfaces/msg/SyncedFrame`
+
+- `frame_data`：完整原始帧，长度由对应节点决定
 - `timestamp_ns`：本地接收时间戳，单位纳秒
 
-## 文档维护约定
-
-- `README.md`：维护项目入口信息、结构概览、运行方式和关键说明
-- `Log.md`：每次收尾都追加记录，写清楚“做了什么 / 改了哪些文件 / 下一步做什么”
-- `Memory.md`：只记录长期有效内容，例如用户偏好、命名规范、固定工作流
-- `docs/`：存放专题说明、设计记录、流程图、提示词和补充文档
-
-如果项目结构、运行方式、串口协议、调试流程发生变化，应同步更新这些文档。
-
-## 相关文档
-
-- [docs/README.md](/home/zkxt/MissionComputer/docs/README.md)
-- [docs/codex_start_prompt.md](/home/zkxt/MissionComputer/docs/codex_start_prompt.md)
-- [docs/frame_sync/README.md](/home/zkxt/MissionComputer/docs/frame_sync/README.md)
-- [Log.md](/home/zkxt/MissionComputer/Log.md)
-- [Memory.md](/home/zkxt/MissionComputer/Memory.md)
+`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。
 
 ## 常见问题
 
@@ -144,19 +199,19 @@ Frame validation failed.
 通常表示：
 
 - 帧头和帧长已经对上了
-- 但 `crc8_variant` 配置不对
+- 但 `crc8_variant` 配置不对，或者发送端数据内容本身有误
 
 当前接收节点会在校验失败时打印：
 
-- 当前使用的 CRC 配置
-- 收到的 CRC8 值
+- 当前使用的 CRC8 配置
+- 收到的 CRC8
 - 多种 CRC8 计算结果
-- 原始 `64` 字节帧内容
+- 整帧十六进制内容
 
-可以根据这条日志快速判断应该切换到哪一种 CRC 参数。
+可以根据这条日志快速判断应该切换到哪一种 `crc8_variant`。
 
 ## 实现说明
 
 - 串口底层使用仓库内置的 POSIX `termios` 封装
+- 3 个接收节点都复用了同一个 `FixedFrameSerialReceiver`
 - 接收线程采用“搜索双帧头建立同步 -> 固定帧长取帧 -> 校验失败重同步”的方式工作
-- 校验通过的完整帧会发布到 ROS 2 话题

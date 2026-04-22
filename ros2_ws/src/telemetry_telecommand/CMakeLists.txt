@@ -18,24 +18,55 @@ find_package(rclcpp REQUIRED)
 # 串口节点使用的 POSIX 串口实现库。
 add_library(serial_support
   src/posix_serial_port.cpp
+  src/fixed_frame_serial_receiver.cpp
 )
 target_include_directories(serial_support
   PUBLIC
     include
 )
-
-add_executable(serial_receiver
-  src/serial_receiver.cpp
-)
-target_include_directories(serial_receiver
-  PRIVATE
-    include
-)
-ament_target_dependencies(serial_receiver
+ament_target_dependencies(serial_support
   interfaces
   rclcpp
 )
-target_link_libraries(serial_receiver serial_support)
+
+add_executable(tm_serial_recv
+  src/tm_serial_recv.cpp
+)
+target_include_directories(tm_serial_recv
+  PRIVATE
+    include
+)
+ament_target_dependencies(tm_serial_recv
+  interfaces
+  rclcpp
+)
+target_link_libraries(tm_serial_recv serial_support)
+
+add_executable(c_tc_serial_recv
+  src/c_tc_serial_recv.cpp
+)
+target_include_directories(c_tc_serial_recv
+  PRIVATE
+    include
+)
+ament_target_dependencies(c_tc_serial_recv
+  interfaces
+  rclcpp
+)
+target_link_libraries(c_tc_serial_recv serial_support)
+
+add_executable(l_tc_serial_recv
+  src/l_tc_serial_recv.cpp
+)
+target_include_directories(l_tc_serial_recv
+  PRIVATE
+    include
+)
+ament_target_dependencies(l_tc_serial_recv
+  interfaces
+  rclcpp
+)
+target_link_libraries(l_tc_serial_recv serial_support)
 
 # 以十六进制形式打印接收帧的调试工具。
 add_executable(frame_visualizer
@@ -52,13 +83,19 @@ ament_target_dependencies(frame_visualizer
 
 install(TARGETS
   serial_support
-  serial_receiver
+  tm_serial_recv
+  c_tc_serial_recv
+  l_tc_serial_recv
   frame_visualizer
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY include/
   DESTINATION include/${PROJECT_NAME}
+)
+
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
 )
 
 # 导出依赖，便于其他包复用本包能力。

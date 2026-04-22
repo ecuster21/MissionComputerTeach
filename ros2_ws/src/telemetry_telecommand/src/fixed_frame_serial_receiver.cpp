@@ -1,65 +1,61 @@
-#include "telemetry_telecommand/serial_receiver.hpp"
+#include "telemetry_telecommand/fixed_frame_serial_receiver.hpp"
 
 #include <algorithm>
-#include <array>
-#include <cctype>
 #include <chrono>
+#include <cctype>
 #include <cstring>
 #include <exception>
 #include <iomanip>
 #include <memory>
 #include <sstream>
+#include <stdexcept>
 
 namespace telemetry_telecommand
 {
 namespace
 {
 
-// 丢弃已消费的数据，同时保持剩余未读数据在缓冲区中连续。
 void consume_bytes(
-  // 传入整个缓冲区和当前有效数据长度，以及要丢弃的字节数。
-  std::array<uint8_t, SEARCH_BUFFER_SIZE> & buffer,
+  std::vector<uint8_t> & buffer,
   std::size_t & bytes_in_buffer,
   std::size_t count)
 {
-  // 如果要丢弃的字节数超过当前缓冲区中的有效数据，就直接清空缓冲区。
   if (count >= bytes_in_buffer) {
     bytes_in_buffer = 0;
     return;
   }
-//std::memmove(目标地址, 源地址, 字节数)
+
   std::memmove(buffer.data(), buffer.data() + count, bytes_in_buffer - count);
   bytes_in_buffer -= count;
 }
 
-// 搜索相隔一个完整帧长的两个连续帧头。
-// 与只匹配单个帧头相比，这样能让初始同步更稳健。
 bool try_find_sync(
-  const std::array<uint8_t, SEARCH_BUFFER_SIZE> & buffer,
+  const std::vector<uint8_t> & buffer,
   std::size_t bytes_in_buffer,
+  std::size_t frame_length,
   std::size_t & offset)
 {
-  if (bytes_in_buffer < FRAME_LENGTH + 2) {
+  if (bytes_in_buffer < frame_length + FRAME_HEADER.size()) {
     offset = 0;
     return false;
   }
 
-  for (std::size_t i = 0; i + FRAME_LENGTH + 1 < bytes_in_buffer; ++i) {
+  for (std::size_t i = 0; i + frame_length + 1 < bytes_in_buffer; ++i) {
     if (
       buffer[i] == FRAME_HEADER[0] &&
       buffer[i + 1] == FRAME_HEADER[1] &&
-      buffer[i + FRAME_LENGTH] == FRAME_HEADER[0] &&
-      buffer[i + FRAME_LENGTH + 1] == FRAME_HEADER[1]
-    ){
+      buffer[i + frame_length] == FRAME_HEADER[0] &&
+      buffer[i + frame_length + 1] == FRAME_HEADER[1]
+    ) {
       offset = i;
       return true;
-      }
+    }
   }
+
   offset = 0;
   return false;
 }
 
-// 在已同步模式下循环读取，直到拿到完整一帧或线程需要退出。
 bool read_exact(
   PosixSerialPort & serial_port,
   uint8_t * buffer,
@@ -90,7 +86,7 @@ std::string normalize_crc8_variant_name(std::string variant_name)
         return '_';
       }
       return static_cast<char>(std::tolower(ch));
-  });
+    });
   return variant_name;
 }
 
@@ -109,34 +105,36 @@ const Crc8Config * try_get_crc8_config(const std::string & variant_name)
   return nullptr;
 }
 
-std::string format_frame_hex(const SerialFrame & frame)
+std::string format_frame_hex(const std::vector<uint8_t> & frame)
 {
   std::ostringstream stream;
   stream << std::hex << std::setfill('0');
-  for (std::size_t i = 0; i < frame.data.size(); ++i) {
+  for (std::size_t i = 0; i < frame.size(); ++i) {
     if (i != 0) {
       stream << ' ';
     }
-    stream << std::setw(2) << static_cast<int>(frame.data[i]);
+    stream << std::setw(2) << static_cast<int>(frame[i]);
   }
   return stream.str();
 }
 
 void log_validation_failure_details(
   const rclcpp::Logger & logger,
-  const SerialFrame & frame,
+  const std::vector<uint8_t> & frame,
+  std::size_t frame_length,
   const std::string & configured_variant)
 {
-  const auto received_crc = frame.encoded_crc8();
-  const auto crc_standard = frame.calculate_crc8(CRC8_STANDARD);
-  const auto crc_maxim = frame.calculate_crc8(CRC8_MAXIM);
-  const auto crc_j1850 = frame.calculate_crc8(CRC8_SAE_J1850);
+  const auto received_crc = encoded_crc8(frame.data(), frame_length);
+  const auto crc_standard = calculate_crc8(frame.data(), frame_length, CRC8_STANDARD);
+  const auto crc_maxim = calculate_crc8(frame.data(), frame_length, CRC8_MAXIM);
+  const auto crc_j1850 = calculate_crc8(frame.data(), frame_length, CRC8_SAE_J1850);
 
   RCLCPP_WARN(
     logger,
-    "Frame validation failed. configured=%s recv_crc8=0x%02X "
+    "Frame validation failed. configured=%s frame_length=%zu recv_crc8=0x%02X "
     "calc_crc8=0x%02X calc_maxim=0x%02X calc_sae_j1850=0x%02X frame=[%s]",
     configured_variant.c_str(),
+    frame_length,
     received_crc,
     crc_standard,
     crc_maxim,
@@ -146,16 +144,26 @@ void log_validation_failure_details(
 
 }  // 匿名命名空间
 
-SerialReceiver::SerialReceiver()
-: Node("serial_receiver")
+FixedFrameSerialReceiver::FixedFrameSerialReceiver(
+  const std::string & node_name,
+  const std::string & default_port,
+  std::size_t default_frame_length,
+  const std::string & default_topic)
+: Node(node_name)
 {
-  // 通过 ROS 参数配置串口设备，避免每次修改都重新编译。
-  port_name_ = this->declare_parameter<std::string>("port", "/dev/ttyS7");
+  port_name_ = this->declare_parameter<std::string>("port", default_port);
   baud_rate_ = static_cast<uint32_t>(this->declare_parameter<int>("baud_rate", 115200));
   timeout_ms_ = static_cast<uint32_t>(this->declare_parameter<int>("timeout_ms", 100));
+  frame_length_ = static_cast<std::size_t>(
+    this->declare_parameter<int>("frame_length", static_cast<int>(default_frame_length)));
   const auto requested_crc8_variant =
     this->declare_parameter<std::string>("crc8_variant", "crc8");
-  const auto topic_name = this->declare_parameter<std::string>("topic", "synced_frame");
+  const auto topic_name = this->declare_parameter<std::string>("topic", default_topic);
+
+  if (frame_length_ <= FRAME_HEADER.size() + FRAME_CRC8_LENGTH) {
+    throw std::invalid_argument("frame_length must be greater than header + CRC8 length");
+  }
+  search_buffer_size_ = search_buffer_size_for(frame_length_);
 
   const auto * crc8_config = try_get_crc8_config(requested_crc8_variant);
   if (crc8_config == nullptr) {
@@ -170,13 +178,14 @@ SerialReceiver::SerialReceiver()
     crc8_config_ = *crc8_config;
   }
 
-  // 发布校验通过的完整帧，供可视化等下游节点使用。
   frame_publisher_ = this->create_publisher<interfaces::msg::SyncedFrame>(topic_name, 10);
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Expecting frames: EB90 + %zu payload bytes + CRC8(%s).",
-    FRAME_PAYLOAD_LENGTH,
+    "Expecting frames on %s: frame_length=%zu payload=%zu CRC8(%s).",
+    port_name_.c_str(),
+    frame_length_,
+    payload_length_for(frame_length_),
     crc8_variant_name_.c_str());
 
   if (!initialize_serial()) {
@@ -186,12 +195,11 @@ SerialReceiver::SerialReceiver()
       port_name_.c_str());
   }
 
-  receive_thread_ = std::thread(&SerialReceiver::receive_data, this);
+  receive_thread_ = std::thread(&FixedFrameSerialReceiver::receive_data, this);
 }
 
-SerialReceiver::~SerialReceiver()
+FixedFrameSerialReceiver::~FixedFrameSerialReceiver()
 {
-  // 先通知线程退出，再关闭串口，最后等待线程结束。
   stop_requested_.store(true);
   close_serial();
   if (receive_thread_.joinable()) {
@@ -199,10 +207,9 @@ SerialReceiver::~SerialReceiver()
   }
 }
 
-bool SerialReceiver::initialize_serial()
+bool FixedFrameSerialReceiver::initialize_serial()
 {
   try {
-    // 每次重连都重新下发配置，便于处理插拔后的串口恢复。
     serial_port_.set_port(port_name_);
     serial_port_.set_baud_rate(baud_rate_);
     serial_port_.set_timeout_ms(timeout_ms_);
@@ -227,7 +234,7 @@ bool SerialReceiver::initialize_serial()
   }
 }
 
-void SerialReceiver::close_serial()
+void FixedFrameSerialReceiver::close_serial()
 {
   try {
     if (serial_port_.is_open()) {
@@ -242,10 +249,9 @@ void SerialReceiver::close_serial()
   }
 }
 
-void SerialReceiver::receive_data()
+void FixedFrameSerialReceiver::receive_data()
 {
-  // 缓冲区既要能用于搜索帧边界，也要能暂存不完整的尾部数据。
-  std::array<uint8_t, SEARCH_BUFFER_SIZE> buffer{};
+  std::vector<uint8_t> buffer(search_buffer_size_, 0U);
   std::size_t bytes_in_buffer = 0;
   bool is_synced = false;
 
@@ -262,13 +268,12 @@ void SerialReceiver::receive_data()
 
     try {
       if (!is_synced) {
-        if (bytes_in_buffer == SEARCH_BUFFER_SIZE) {
-          // 缓冲区满了还没同步，就丢掉最旧的一帧长度数据继续寻找。
-          consume_bytes(buffer, bytes_in_buffer, FRAME_LENGTH);
+        if (bytes_in_buffer == search_buffer_size_) {
+          consume_bytes(buffer, bytes_in_buffer, frame_length_);
         }
 
         const auto bytes_read =
-          serial_port_.read(buffer.data() + bytes_in_buffer, SEARCH_BUFFER_SIZE - bytes_in_buffer);
+          serial_port_.read(buffer.data() + bytes_in_buffer, search_buffer_size_ - bytes_in_buffer);
         if (bytes_read == 0) {
           std::this_thread::sleep_for(std::chrono::milliseconds(5));
           continue;
@@ -276,11 +281,10 @@ void SerialReceiver::receive_data()
         bytes_in_buffer += bytes_read;
 
         std::size_t offset = 0;
-        if (!try_find_sync(buffer, bytes_in_buffer, offset)) {
+        if (!try_find_sync(buffer, bytes_in_buffer, frame_length_, offset)) {
           continue;
         }
 
-        // 保留从同步点开始的数据，先把用户态里已经读到的内容消化完。
         consume_bytes(buffer, bytes_in_buffer, offset);
         is_synced = true;
         RCLCPP_INFO(this->get_logger(), "Frame synchronization established.");
@@ -288,13 +292,15 @@ void SerialReceiver::receive_data()
 
       while (is_synced && rclcpp::ok() && !stop_requested_.load()) {
         if (bytes_in_buffer == 0) {
-          // 用户态缓冲已经吃空，再切换到固定 64 字节的精确读帧模式。
-          SerialFrame frame;
-          if (!read_exact(serial_port_, frame.data.data(), FRAME_LENGTH, stop_requested_)) {
+          std::vector<uint8_t> frame(frame_length_, 0U);
+          if (!read_exact(serial_port_, frame.data(), frame_length_, stop_requested_)) {
             return;
           }
 
-          if (frame.has_valid_header() && frame.validate_crc8(crc8_config_)) {
+          if (
+            has_valid_header(frame.data(), frame_length_) &&
+            validate_crc8(frame.data(), frame_length_, crc8_config_))
+          {
             publish_frame(frame);
             continue;
           }
@@ -302,44 +308,48 @@ void SerialReceiver::receive_data()
           log_validation_failure_details(
             this->get_logger(),
             frame,
+            frame_length_,
             crc8_variant_name_);
-          std::copy(frame.data.begin(), frame.data.end(), buffer.begin());
-          bytes_in_buffer = FRAME_LENGTH;
+          std::copy(frame.begin(), frame.end(), buffer.begin());
+          bytes_in_buffer = frame_length_;
           is_synced = false;
           break;
         }
 
-        if (bytes_in_buffer < FRAME_LENGTH) {
+        if (bytes_in_buffer < frame_length_) {
           const auto bytes_read =
-            serial_port_.read(buffer.data() + bytes_in_buffer, FRAME_LENGTH - bytes_in_buffer);
+            serial_port_.read(buffer.data() + bytes_in_buffer, frame_length_ - bytes_in_buffer);
           if (bytes_read == 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
             break;
           }
           bytes_in_buffer += bytes_read;
-          if (bytes_in_buffer < FRAME_LENGTH) {
+          if (bytes_in_buffer < frame_length_) {
             break;
           }
         }
 
-        SerialFrame frame;
-        // 从缓冲区头部拼出完整帧，再决定是否继续保持同步。
-        std::copy_n(buffer.data(), FRAME_LENGTH, frame.data.begin());
+        std::vector<uint8_t> frame(frame_length_, 0U);
+        std::copy_n(buffer.data(), frame_length_, frame.begin());
 
-        if (frame.has_valid_header() && frame.validate_crc8(crc8_config_)) {
+        if (
+          has_valid_header(frame.data(), frame_length_) &&
+          validate_crc8(frame.data(), frame_length_, crc8_config_))
+        {
           publish_frame(frame);
-          consume_bytes(buffer, bytes_in_buffer, FRAME_LENGTH);
+          consume_bytes(buffer, bytes_in_buffer, frame_length_);
           continue;
         }
 
         log_validation_failure_details(
           this->get_logger(),
           frame,
+          frame_length_,
           crc8_variant_name_);
         consume_bytes(buffer, bytes_in_buffer, 1);
 
         std::size_t offset = 0;
-        if (try_find_sync(buffer, bytes_in_buffer, offset)) {
+        if (try_find_sync(buffer, bytes_in_buffer, frame_length_, offset)) {
           consume_bytes(buffer, bytes_in_buffer, offset);
           continue;
         }
@@ -360,23 +370,12 @@ void SerialReceiver::receive_data()
   }
 }
 
-void SerialReceiver::publish_frame(const SerialFrame & frame)
+void FixedFrameSerialReceiver::publish_frame(const std::vector<uint8_t> & frame)
 {
   interfaces::msg::SyncedFrame msg;
-  // 发布原始帧字节，并附带本地接收时间戳。
-  std::copy(frame.data.begin(), frame.data.end(), msg.frame_data.begin());
+  msg.frame_data = frame;
   msg.timestamp_ns = this->get_clock()->now().nanoseconds();
   frame_publisher_->publish(msg);
 }
 
 }  // telemetry_telecommand 命名空间
-
-int main(int argc, char * argv[])
-{
-  // 标准 ROS 2 节点启动与退出流程。
-  rclcpp::init(argc, argv);
-  auto receiver = std::make_shared<telemetry_telecommand::SerialReceiver>();
-  rclcpp::spin(receiver);
-  rclcpp::shutdown();
-  return 0;
-}

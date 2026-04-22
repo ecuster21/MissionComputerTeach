@@ -13,6 +13,8 @@
   <depend>interfaces</depend>
   <!-- 接收节点和可视化节点依赖的 ROS 2 客户端库。 -->
   <depend>rclcpp</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <!-- ROS 2 包常用的静态检查依赖。 -->
   <test_depend>ament_lint_auto</test_depend>

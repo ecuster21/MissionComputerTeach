@@ -7,7 +7,7 @@
 - [codex_start_prompt.md](/home/zkxt/MissionComputer/docs/codex_start_prompt.md)
   给 Codex 的项目启动提示词模板，适合在正式开发前作为开场提示
 - [frame_sync/README.md](/home/zkxt/MissionComputer/docs/frame_sync/README.md)
-  串口帧同步算法说明与图解入口
+  当前公共接收类 `FixedFrameSerialReceiver` 的帧同步算法说明与图解入口
 
 ## 后续建议放这里的内容
 
