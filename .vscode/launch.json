@@ -2,39 +2,140 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) Launch ROS2 Node",
+            "name": "(gdb) serial_receiver",
             "type": "cppdbg",
             "request": "launch",
-            // 关键修改：指向 install 目录下的可执行文件
-            "program": "${workspaceFolder}/install/telemetry_telecommand/lib/telemetry_telecommand/telemetry_telecommand_node",
-            "args": [],
+            // 使用独立的 Debug 安装目录，避免覆盖默认 Release 产物。
+            "program": "${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand/lib/telemetry_telecommand/serial_receiver",
+            "args": [
+                "--ros-args",
+                "-p",
+                "port:=/dev/ttyS7",
+                "-p",
+                "baud_rate:=115200",
+                "-p",
+                "timeout_ms:=100",
+                "-p",
+                "crc16_variant:=ibm",
+                "-p",
+                "crc16_big_endian:=true",
+                "-p",
+                "topic:=synced_frame"
+            ],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/ros2_ws",
             "environment": [
-                // ROS2 调试必须加载环境变量，否则会找不到依赖
                 {
-                    "name": "LD_LIBRARY_PATH",
-                    "value": "${workspaceFolder}/install/telemetry_telecommand/lib:${env:LD_LIBRARY_PATH}"
+                    "name": "ROS_DISTRO",
+                    "value": "jazzy"
+                },
+                {
+                    "name": "ROS_VERSION",
+                    "value": "2"
+                },
+                {
+                    "name": "ROS_PYTHON_VERSION",
+                    "value": "3"
                 },
                 {
                     "name": "AMENT_PREFIX_PATH",
-                    "value": "${workspaceFolder}/install"
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces:${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand:/opt/ros/jazzy:${env:AMENT_PREFIX_PATH}"
+                },
+                {
+                    "name": "CMAKE_PREFIX_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces:${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand:/opt/ros/jazzy:${env:CMAKE_PREFIX_PATH}"
+                },
+                {
+                    "name": "COLCON_PREFIX_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug:${env:COLCON_PREFIX_PATH}"
+                },
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces/lib:${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand/lib:/opt/ros/jazzy/lib:${env:LD_LIBRARY_PATH}"
+                },
+                {
+                    "name": "PYTHONPATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces/lib/python3.12/site-packages:/opt/ros/jazzy/lib/python3.12/site-packages:${env:PYTHONPATH}"
+                },
+                {
+                    "name": "PATH",
+                    "value": "/opt/ros/jazzy/bin:${env:PATH}"
                 }
             ],
             "externalConsole": false,
             "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "colcon build (Debug)",
             "setupCommands": [
                 {
                     "description": "Enable pretty-printing for gdb",
                     "text": "-enable-pretty-printing",
                     "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "(gdb) frame_visualizer",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand/lib/telemetry_telecommand/frame_visualizer",
+            "args": [
+                "--ros-args",
+                "-p",
+                "topic:=synced_frame"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/ros2_ws",
+            "environment": [
+                {
+                    "name": "ROS_DISTRO",
+                    "value": "jazzy"
                 },
                 {
-                    "description": "Set Disassembly Flavor to Intel",
-                    "text": "-gdb-set disassembly-flavor intel",
+                    "name": "ROS_VERSION",
+                    "value": "2"
+                },
+                {
+                    "name": "ROS_PYTHON_VERSION",
+                    "value": "3"
+                },
+                {
+                    "name": "AMENT_PREFIX_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces:${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand:/opt/ros/jazzy:${env:AMENT_PREFIX_PATH}"
+                },
+                {
+                    "name": "CMAKE_PREFIX_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces:${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand:/opt/ros/jazzy:${env:CMAKE_PREFIX_PATH}"
+                },
+                {
+                    "name": "COLCON_PREFIX_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug:${env:COLCON_PREFIX_PATH}"
+                },
+                {
+                    "name": "LD_LIBRARY_PATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces/lib:${workspaceFolder}/ros2_ws/install/debug/telemetry_telecommand/lib:/opt/ros/jazzy/lib:${env:LD_LIBRARY_PATH}"
+                },
+                {
+                    "name": "PYTHONPATH",
+                    "value": "${workspaceFolder}/ros2_ws/install/debug/interfaces/lib/python3.12/site-packages:/opt/ros/jazzy/lib/python3.12/site-packages:${env:PYTHONPATH}"
+                },
+                {
+                    "name": "PATH",
+                    "value": "/opt/ros/jazzy/bin:${env:PATH}"
+                }
+            ],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "miDebuggerPath": "/usr/bin/gdb",
+            "preLaunchTask": "colcon build (Debug)",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
                     "ignoreFailures": true
                 }
             ]
-        }
+        },
+
     ]
 }

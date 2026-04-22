@@ -35,9 +35,8 @@ private:
   std::string port_name_;
   uint32_t baud_rate_;
   uint32_t timeout_ms_;
-  std::string crc16_variant_name_;
-  Crc16Config crc16_config_{CRC16_CCITT_FALSE};
-  bool crc16_big_endian_{true};
+  std::string crc8_variant_name_;
+  Crc8Config crc8_config_{CRC8_STANDARD};
   rclcpp::Publisher<interfaces::msg::SyncedFrame>::SharedPtr frame_publisher_;
   // 停止标记和专用接收线程，避免串口阻塞影响 ROS spin。
   std::atomic<bool> stop_requested_{false};

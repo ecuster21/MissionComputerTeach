@@ -1,6 +1,6 @@
 # MissionComputer
 
-`MissionComputer` 是一个基于 ROS 2 Jazzy 的串口接收工程，用于从真实串口读取固定长度二进制帧，完成帧同步与 CRC16 校验，并将有效帧发布为 ROS 2 消息供下游使用。
+`MissionComputer` 是一个基于 ROS 2 Jazzy 的串口接收工程，用于从真实串口读取固定长度二进制帧，完成帧同步与 CRC8 校验，并将有效帧发布为 ROS 2 消息供下游使用。
 
 当前项目只保留两个可执行程序：
 
@@ -44,7 +44,7 @@ source install/setup.bash
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p crc16_variant:=ibm -p crc16_big_endian:=true -p topic:=synced_frame
+ros2 run telemetry_telecommand serial_receiver --ros-args -p port:=/dev/ttyS7 -p baud_rate:=115200 -p timeout_ms:=100 -p crc8_variant:=crc8 -p topic:=synced_frame
 ```
 
 终端 3：启动可视化节点。
@@ -70,26 +70,29 @@ sudo usermod -aG dialout $USER
 
 - 帧头：`0xEB 0x90`
 - 总长度：`64` 字节
-- 数据区：`60` 字节
-- CRC：`2` 字节
+- 数据区：`61` 字节
+- CRC：`1` 字节
 
 即：
 
 ```text
-EB 90 + 60字节数据 + 2字节CRC16
+EB 90 + 61字节数据 + 1字节CRC8
 ```
 
-接收节点当前支持这些 CRC16 变体：
+接收节点当前支持这些 CRC8 变体：
 
-- `ccitt_false`
-- `modbus`
-- `ibm`
-- `x25`
+- `crc8`
+- `maxim`
+- `sae_j1850`
 
-当前硬件联调示例使用：
+当前实现默认使用：
 
-- `crc16_variant:=ibm`
-- `crc16_big_endian:=true`
+- `crc8_variant:=crc8`
+
+说明：
+
+- CRC8 只有 `1` 字节，不存在多字节大小端问题
+- 因此项目里不再保留 CRC 字节序参数
 
 ## 参数
 
@@ -98,8 +101,7 @@ EB 90 + 60字节数据 + 2字节CRC16
 - `port`：串口路径，默认 `/dev/ttyS7`
 - `baud_rate`：波特率，默认 `115200`
 - `timeout_ms`：读超时，默认 `100`
-- `crc16_variant`：CRC16 变体，默认 `ccitt_false`
-- `crc16_big_endian`：CRC 字节序，默认 `true`
+- `crc8_variant`：CRC8 变体，默认 `crc8`
 - `topic`：发布话题，默认 `synced_frame`
 
 `frame_visualizer` 支持：
@@ -142,13 +144,13 @@ Frame validation failed.
 通常表示：
 
 - 帧头和帧长已经对上了
-- 但 `crc16_variant` 或 `crc16_big_endian` 配置不对
+- 但 `crc8_variant` 配置不对
 
 当前接收节点会在校验失败时打印：
 
 - 当前使用的 CRC 配置
-- 收到的 CRC 大端/小端解释值
-- 多种 CRC16 计算结果
+- 收到的 CRC8 值
+- 多种 CRC8 计算结果
 - 原始 `64` 字节帧内容
 
 可以根据这条日志快速判断应该切换到哪一种 CRC 参数。

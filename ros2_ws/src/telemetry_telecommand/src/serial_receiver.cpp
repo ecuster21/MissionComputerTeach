@@ -79,7 +79,7 @@ bool read_exact(
   return total_read == size;
 }
 
-std::string normalize_crc16_variant_name(std::string variant_name)
+std::string normalize_crc8_variant_name(std::string variant_name)
 {
   std::transform(
     variant_name.begin(),
@@ -90,24 +90,21 @@ std::string normalize_crc16_variant_name(std::string variant_name)
         return '_';
       }
       return static_cast<char>(std::tolower(ch));
-    });
+  });
   return variant_name;
 }
 
-const Crc16Config * try_get_crc16_config(const std::string & variant_name)
+const Crc8Config * try_get_crc8_config(const std::string & variant_name)
 {
-  const auto normalized_name = normalize_crc16_variant_name(variant_name);
-  if (normalized_name == "ccitt_false" || normalized_name == "ccitt") {
-    return &CRC16_CCITT_FALSE;
+  const auto normalized_name = normalize_crc8_variant_name(variant_name);
+  if (normalized_name == "crc8" || normalized_name == "standard") {
+    return &CRC8_STANDARD;
   }
-  if (normalized_name == "modbus") {
-    return &CRC16_MODBUS;
+  if (normalized_name == "maxim" || normalized_name == "dallas") {
+    return &CRC8_MAXIM;
   }
-  if (normalized_name == "ibm" || normalized_name == "arc" || normalized_name == "ansi") {
-    return &CRC16_IBM;
-  }
-  if (normalized_name == "x25") {
-    return &CRC16_X25;
+  if (normalized_name == "sae_j1850" || normalized_name == "j1850") {
+    return &CRC8_SAE_J1850;
   }
   return nullptr;
 }
@@ -128,28 +125,22 @@ std::string format_frame_hex(const SerialFrame & frame)
 void log_validation_failure_details(
   const rclcpp::Logger & logger,
   const SerialFrame & frame,
-  const std::string & configured_variant,
-  bool configured_big_endian)
+  const std::string & configured_variant)
 {
-  const auto received_crc_be = frame.encoded_crc16(true);
-  const auto received_crc_le = frame.encoded_crc16(false);
-  const auto crc_ibm = frame.calculate_crc16(CRC16_IBM);
-  const auto crc_ccitt = frame.calculate_crc16(CRC16_CCITT_FALSE);
-  const auto crc_modbus = frame.calculate_crc16(CRC16_MODBUS);
-  const auto crc_x25 = frame.calculate_crc16(CRC16_X25);
+  const auto received_crc = frame.encoded_crc8();
+  const auto crc_standard = frame.calculate_crc8(CRC8_STANDARD);
+  const auto crc_maxim = frame.calculate_crc8(CRC8_MAXIM);
+  const auto crc_j1850 = frame.calculate_crc8(CRC8_SAE_J1850);
 
   RCLCPP_WARN(
     logger,
-    "Frame validation failed. configured=%s/%s-endian recv_be=0x%04X recv_le=0x%04X "
-    "calc_ibm=0x%04X calc_ccitt_false=0x%04X calc_modbus=0x%04X calc_x25=0x%04X frame=[%s]",
+    "Frame validation failed. configured=%s recv_crc8=0x%02X "
+    "calc_crc8=0x%02X calc_maxim=0x%02X calc_sae_j1850=0x%02X frame=[%s]",
     configured_variant.c_str(),
-    configured_big_endian ? "big" : "little",
-    received_crc_be,
-    received_crc_le,
-    crc_ibm,
-    crc_ccitt,
-    crc_modbus,
-    crc_x25,
+    received_crc,
+    crc_standard,
+    crc_maxim,
+    crc_j1850,
     format_frame_hex(frame).c_str());
 }
 
@@ -162,22 +153,21 @@ SerialReceiver::SerialReceiver()
   port_name_ = this->declare_parameter<std::string>("port", "/dev/ttyS7");
   baud_rate_ = static_cast<uint32_t>(this->declare_parameter<int>("baud_rate", 115200));
   timeout_ms_ = static_cast<uint32_t>(this->declare_parameter<int>("timeout_ms", 100));
-  const auto requested_crc16_variant =
-    this->declare_parameter<std::string>("crc16_variant", "ccitt_false");
-  crc16_big_endian_ = this->declare_parameter<bool>("crc16_big_endian", true);
+  const auto requested_crc8_variant =
+    this->declare_parameter<std::string>("crc8_variant", "crc8");
   const auto topic_name = this->declare_parameter<std::string>("topic", "synced_frame");
 
-  const auto * crc16_config = try_get_crc16_config(requested_crc16_variant);
-  if (crc16_config == nullptr) {
+  const auto * crc8_config = try_get_crc8_config(requested_crc8_variant);
+  if (crc8_config == nullptr) {
     RCLCPP_WARN(
       this->get_logger(),
-      "Unsupported crc16_variant '%s', defaulting to ccitt_false.",
-      requested_crc16_variant.c_str());
-    crc16_variant_name_ = "ccitt_false";
-    crc16_config_ = CRC16_CCITT_FALSE;
+      "Unsupported crc8_variant '%s', defaulting to crc8.",
+      requested_crc8_variant.c_str());
+    crc8_variant_name_ = "crc8";
+    crc8_config_ = CRC8_STANDARD;
   } else {
-    crc16_variant_name_ = normalize_crc16_variant_name(requested_crc16_variant);
-    crc16_config_ = *crc16_config;
+    crc8_variant_name_ = normalize_crc8_variant_name(requested_crc8_variant);
+    crc8_config_ = *crc8_config;
   }
 
   // 发布校验通过的完整帧，供可视化等下游节点使用。
@@ -185,10 +175,9 @@ SerialReceiver::SerialReceiver()
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Expecting frames: EB90 + %zu payload bytes + CRC16(%s, %s-endian).",
+    "Expecting frames: EB90 + %zu payload bytes + CRC8(%s).",
     FRAME_PAYLOAD_LENGTH,
-    crc16_variant_name_.c_str(),
-    crc16_big_endian_ ? "big" : "little");
+    crc8_variant_name_.c_str());
 
   if (!initialize_serial()) {
     RCLCPP_WARN(
@@ -305,7 +294,7 @@ void SerialReceiver::receive_data()
             return;
           }
 
-          if (frame.has_valid_header() && frame.validate_crc16(crc16_config_, crc16_big_endian_)) {
+          if (frame.has_valid_header() && frame.validate_crc8(crc8_config_)) {
             publish_frame(frame);
             continue;
           }
@@ -313,8 +302,7 @@ void SerialReceiver::receive_data()
           log_validation_failure_details(
             this->get_logger(),
             frame,
-            crc16_variant_name_,
-            crc16_big_endian_);
+            crc8_variant_name_);
           std::copy(frame.data.begin(), frame.data.end(), buffer.begin());
           bytes_in_buffer = FRAME_LENGTH;
           is_synced = false;
@@ -338,7 +326,7 @@ void SerialReceiver::receive_data()
         // 从缓冲区头部拼出完整帧，再决定是否继续保持同步。
         std::copy_n(buffer.data(), FRAME_LENGTH, frame.data.begin());
 
-        if (frame.has_valid_header() && frame.validate_crc16(crc16_config_, crc16_big_endian_)) {
+        if (frame.has_valid_header() && frame.validate_crc8(crc8_config_)) {
           publish_frame(frame);
           consume_bytes(buffer, bytes_in_buffer, FRAME_LENGTH);
           continue;
@@ -347,8 +335,7 @@ void SerialReceiver::receive_data()
         log_validation_failure_details(
           this->get_logger(),
           frame,
-          crc16_variant_name_,
-          crc16_big_endian_);
+          crc8_variant_name_);
         consume_bytes(buffer, bytes_in_buffer, 1);
 
         std::size_t offset = 0;

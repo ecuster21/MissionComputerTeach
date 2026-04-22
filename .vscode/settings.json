@@ -2,4 +2,12 @@
   "C_Cpp.default.compileCommands": "${workspaceFolder}/ros2_ws/build/telemetry_telecommand/compile_commands.json",
   "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
   "cmake.configureOnOpen": false
+
+  "ros.rosSetupScript": "/home/zkxt/MissionComputer/ros2_ws/install/setup.bash",
+  "files.associations": {
+      "*.hpp": "cpp",
+      "*.h": "cpp",
+      "*.c": "cpp",
+      "*.cpp": "cpp"
+  }
 }
