@@ -29,18 +29,18 @@ ament_target_dependencies(serial_support
   rclcpp
 )
 
-add_executable(tm_serial_recv
-  src/tm_serial_recv.cpp
+add_executable(fc_tm_serial_recv
+  src/fc_tm_serial_recv.cpp
 )
-target_include_directories(tm_serial_recv
+target_include_directories(fc_tm_serial_recv
   PRIVATE
     include
 )
-ament_target_dependencies(tm_serial_recv
+ament_target_dependencies(fc_tm_serial_recv
   interfaces
   rclcpp
 )
-target_link_libraries(tm_serial_recv serial_support)
+target_link_libraries(fc_tm_serial_recv serial_support)
 
 add_executable(c_tc_serial_recv
   src/c_tc_serial_recv.cpp
@@ -83,7 +83,7 @@ ament_target_dependencies(frame_visualizer
 
 install(TARGETS
   serial_support
-  tm_serial_recv
+  fc_tm_serial_recv
   c_tc_serial_recv
   l_tc_serial_recv
   frame_visualizer

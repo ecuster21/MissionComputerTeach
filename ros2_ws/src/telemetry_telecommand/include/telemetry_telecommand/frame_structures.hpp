@@ -11,7 +11,7 @@ namespace telemetry_telecommand
 // 固定帧头，用于在串口字节流中识别帧边界。
 constexpr std::array<uint8_t, 2> FRAME_HEADER{0xEB, 0x90};
 constexpr std::size_t FRAME_CRC8_LENGTH = 1;
-constexpr std::size_t TM_FRAME_LENGTH = 64;
+constexpr std::size_t FC_TM_FRAME_LENGTH = 64;
 constexpr std::size_t TC_FRAME_LENGTH = 32;
 
 struct Crc8Config

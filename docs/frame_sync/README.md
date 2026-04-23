@@ -12,7 +12,7 @@
 
 项目里有 3 个接收节点：
 
-- `tm_serial_recv`：默认 `64` 字节帧
+- `fc_tm_serial_recv`：默认 `64` 字节帧
 - `c_tc_serial_recv`：默认 `32` 字节帧
 - `l_tc_serial_recv`：默认 `32` 字节帧
 

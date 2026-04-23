@@ -13,7 +13,7 @@ public:
   : Node("frame_visualizer")
   {
     // 允许通过命令行参数覆盖订阅话题名。
-    const auto topic_name = this->declare_parameter<std::string>("topic", "tm_synced_frame");
+    const auto topic_name = this->declare_parameter<std::string>("topic", "fc_tm_synced_frame");
     frame_subscriber_ = this->create_subscription<interfaces::msg::SyncedFrame>(
       topic_name,
       10,

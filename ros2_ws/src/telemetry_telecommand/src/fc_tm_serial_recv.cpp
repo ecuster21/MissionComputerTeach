@@ -6,10 +6,10 @@ int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
   auto receiver = std::make_shared<telemetry_telecommand::FixedFrameSerialReceiver>(
-    "tm_serial_recv",
+    "fc_tm_serial_recv",
     "/dev/ttyS7",
-    telemetry_telecommand::TM_FRAME_LENGTH,
-    "tm_synced_frame");
+    telemetry_telecommand::FC_TM_FRAME_LENGTH,
+    "fc_tm_synced_frame");
   rclcpp::spin(receiver);
   rclcpp::shutdown();
   return 0;

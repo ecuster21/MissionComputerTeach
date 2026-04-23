@@ -5,7 +5,7 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    tm_port = LaunchConfiguration("tm_port")
+    fc_tm_port = LaunchConfiguration("fc_tm_port")
     c_tc_port = LaunchConfiguration("c_tc_port")
     l_tc_port = LaunchConfiguration("l_tc_port")
     baud_rate = LaunchConfiguration("baud_rate")
@@ -14,9 +14,9 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument(
-            "tm_port",
+            "fc_tm_port",
             default_value="/dev/ttyS7",
-            description="TM serial port for tm_serial_recv.",
+            description="FC_TM serial port for fc_tm_serial_recv.",
         ),
         DeclareLaunchArgument(
             "c_tc_port",
@@ -45,11 +45,11 @@ def generate_launch_description():
         ),
         Node(
             package="telemetry_telecommand",
-            executable="tm_serial_recv",
-            name="tm_serial_recv",
+            executable="fc_tm_serial_recv",
+            name="fc_tm_serial_recv",
             output="screen",
             parameters=[{
-                "port": tm_port,
+                "port": fc_tm_port,
                 "baud_rate": baud_rate,
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
@@ -79,14 +79,14 @@ def generate_launch_description():
                 "crc8_variant": crc8_variant,
             }],
         ),
-        # Node(
-        #     package="telemetry_telecommand",
-        #     executable="frame_visualizer",
-        #     name="tm_frame_visualizer",
-        #     output="screen",
-        #     parameters=[{
-        #         "topic": "tm_synced_frame",
-        #     }],
+        Node(
+            package="telemetry_telecommand",
+            executable="frame_visualizer",
+            name="fc_tm_frame_visualizer",
+            output="screen",
+            parameters=[{
+                "topic": "fc_tm_synced_frame",
+            }],
         ),
         Node(
             package="telemetry_telecommand",

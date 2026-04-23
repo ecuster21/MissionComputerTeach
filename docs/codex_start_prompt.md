@@ -11,7 +11,7 @@
 - 项目名：MissionComputer
 - 技术栈：ROS 2 Jazzy、C++17、ament_cmake、colcon
 - 工作区：ros2_ws
-- 当前核心节点：tm_serial_recv、c_tc_serial_recv、l_tc_serial_recv、frame_visualizer
+- 当前核心节点：fc_tm_serial_recv、c_tc_serial_recv、l_tc_serial_recv、frame_visualizer
 - 当前协议：帧头 EB 90，固定帧长（64 或 32 字节），CRC8 校验
 - 相关专题文档在 docs/，帧同步说明在 docs/frame_sync/
 

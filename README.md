@@ -2,7 +2,7 @@
 
 基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点，以及 1 个用于整套联调的一键启动文件：
 
-- `tm_serial_recv`：默认接收 `/dev/ttyS7`，固定 `64` 字节帧
+- `fc_tm_serial_recv`：默认接收 `/dev/ttyS7`，固定 `64` 字节帧
 - `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，固定 `32` 字节帧
 - `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，固定 `32` 字节帧
 - `frame_visualizer`：订阅接收到的完整帧并以十六进制打印
@@ -39,13 +39,13 @@ source install/setup.bash
 
 不同节点的默认帧长：
 
-- `tm_serial_recv`：`64` 字节
+- `fc_tm_serial_recv`：`64` 字节
 - `c_tc_serial_recv`：`32` 字节
 - `l_tc_serial_recv`：`32` 字节
 
 因此：
 
-- `tm_serial_recv` 的默认帧结构是 `EB 90 + 61字节数据 + 1字节CRC8`
+- `fc_tm_serial_recv` 的默认帧结构是 `EB 90 + 61字节数据 + 1字节CRC8`
 - `c_tc_serial_recv` 和 `l_tc_serial_recv` 的默认帧结构是 `EB 90 + 29字节数据 + 1字节CRC8`
 
 ## 运行
@@ -63,10 +63,10 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py
 
 这个 launch 会同时启动：
 
-- `tm_serial_recv`，默认读取 `/dev/ttyS7`
+- `fc_tm_serial_recv`，默认读取 `/dev/ttyS7`
 - `c_tc_serial_recv`，默认读取 `/dev/ttyS3`
 - `l_tc_serial_recv`，默认读取 `/dev/ttyS4`
-- `tm_frame_visualizer`，订阅 `tm_synced_frame`
+- `fc_tm_frame_visualizer`，订阅 `fc_tm_synced_frame`
 - `c_tc_frame_visualizer`，订阅 `c_tc_synced_frame`
 - `l_tc_frame_visualizer`，订阅 `l_tc_synced_frame`
 
@@ -77,7 +77,7 @@ cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py \
-  tm_port:=/dev/ttyS7 \
+  fc_tm_port:=/dev/ttyS7 \
   c_tc_port:=/dev/ttyS3 \
   l_tc_port:=/dev/ttyS4 \
   baud_rate:=115200 \
@@ -91,13 +91,13 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py \
 
 终端 2：按需启动接收节点。
 
-`tm_serial_recv`
+`fc_tm_serial_recv`
 
 ```bash
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run telemetry_telecommand tm_serial_recv
+ros2 run telemetry_telecommand fc_tm_serial_recv
 ```
 
 `c_tc_serial_recv`
@@ -120,13 +120,13 @@ ros2 run telemetry_telecommand l_tc_serial_recv
 
 终端 3：启动可视化节点，并指定要看的话题。
 
-例如查看 `tm_serial_recv`：
+例如查看 `fc_tm_serial_recv`：
 
 ```bash
 cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=tm_synced_frame
+ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=fc_tm_synced_frame
 ```
 
 如果串口权限不足：
@@ -139,12 +139,12 @@ sudo usermod -aG dialout $USER
 
 ## 默认参数
 
-`tm_serial_recv`
+`fc_tm_serial_recv`
 
 - `port`：`/dev/ttyS7`
 - `frame_length`：`64`
 - `crc8_variant`：`crc8`
-- `topic`：`tm_synced_frame`
+- `topic`：`fc_tm_synced_frame`
 
 `c_tc_serial_recv`
 
@@ -167,11 +167,11 @@ sudo usermod -aG dialout $USER
 
 `frame_visualizer` 支持：
 
-- `topic`：订阅话题名，默认 `tm_synced_frame`
+- `topic`：订阅话题名，默认 `fc_tm_synced_frame`
 
 `multi_serial_visualizers.launch.py` 支持：
 
-- `tm_port`：默认 `/dev/ttyS7`
+- `fc_tm_port`：默认 `/dev/ttyS7`
 - `c_tc_port`：默认 `/dev/ttyS3`
 - `l_tc_port`：默认 `/dev/ttyS4`
 - `baud_rate`：默认 `115200`
