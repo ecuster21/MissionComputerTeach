@@ -324,9 +324,10 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     flexible_byte_list_descriptor);
   const auto topic_name = this->declare_parameter<std::string>("topic", default_topic);
 
-  if (frame_length_ <= FRAME_DESTINATION_ID_OFFSET + FRAME_CRC8_LENGTH) {
+  if (frame_length_ < minimum_frame_length()) {
     throw std::invalid_argument(
-      "frame_length must contain header + frame_type + source_id + destination_id + CRC8");
+      "frame_length must contain header + frame_type + source_id + destination_id + "
+      "protocol_timestamp + CRC8");
   }
   search_buffer_size_ = search_buffer_size_for(frame_length_);
   destination_ids_ = parse_uint8_list_parameter(
@@ -359,10 +360,11 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Expecting frames on %s: frame_length=%zu payload=%zu CRC8(%s).",
+    "Expecting frames on %s: frame_length=%zu payload=%zu data=%zu CRC8(%s).",
     port_name_.c_str(),
     frame_length_,
     payload_length_for(frame_length_),
+    data_area_length_for(frame_length_),
     crc8_variant_name_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
@@ -561,6 +563,7 @@ bool FixedFrameSerialReceiver::should_process_frame(const std::vector<uint8_t> &
   const auto type = frame_type(frame.data());
   const auto source = source_id(frame.data());
   const auto destination = destination_id(frame.data());
+  const auto timestamp = protocol_timestamp(frame.data(), frame.size());
 
   std::lock_guard<std::mutex> lock(filter_mutex_);
   const bool destination_matches =
@@ -572,10 +575,11 @@ bool FixedFrameSerialReceiver::should_process_frame(const std::vector<uint8_t> &
     RCLCPP_DEBUG(
       this->get_logger(),
       "Ignoring frame: type=0x%02X source_id=0x%02X destination_id=0x%02X "
-      "destination_ids=%s handled_frame_types=%s.",
+      "timestamp=0x%02X destination_ids=%s handled_frame_types=%s.",
       type,
       source,
       destination,
+      timestamp,
       format_byte_list(destination_ids_).c_str(),
       format_byte_list(handled_frame_types_).c_str());
     return false;

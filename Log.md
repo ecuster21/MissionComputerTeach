@@ -81,3 +81,27 @@
 
 - 实机运行时传入本机机号，例如 `destination_ids:=1`
 - 后续新增需要处理的帧类型时，只更新 `handled_frame_types` 参数
+
+## 2026-04-23
+
+### 这次做了什么
+
+- 在 CRC8 前新增 1 字节协议时间戳字段
+- 保持固定总帧长 `64` 和 `32` 不变，数据区相应缩短为 `57` 字节和 `25` 字节
+- 明确 CRC8 计算范围包含协议时间戳，不包含最后 CRC8 字节
+
+### 改了哪些文件
+
+- `README.md`
+- `Memory.md`
+- `Log.md`
+- `docs/codex_start_prompt.md`
+- `docs/frame_sync/README.md`
+- `docs/frame_sync/05_字节流示例.md`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/frame_structures.hpp`
+- `ros2_ws/src/telemetry_telecommand/src/fixed_frame_serial_receiver.cpp`
+
+### 下一步做什么
+
+- 使用新的 PC 端测试脚本发送含 1 字节协议时间戳的帧
+- 实机观察可视化输出，确认 CRC 校验和目的 ID、帧类型过滤都正常

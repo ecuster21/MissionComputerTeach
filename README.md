@@ -32,6 +32,7 @@ source install/setup.bash
 
 - 帧头固定：`0xEB 0x90`
 - 帧头后 3 个字节依次是：`frame_type`、`source_id`、`destination_id`
+- CRC8 前 1 个字节是协议时间戳
 - 校验类型：`CRC8`
 - 支持的 CRC8 变体：
   - `crc8`
@@ -41,8 +42,10 @@ source install/setup.bash
 完整帧布局：
 
 ```text
-EB 90 + 1字节帧类型 + 1字节源ID + 1字节目的ID + 数据区 + 1字节CRC8
+EB 90 + 1字节帧类型 + 1字节源ID + 1字节目的ID + 数据区 + 1字节时间戳 + 1字节CRC8
 ```
+
+CRC8 计算范围是从帧头 `EB 90` 到 1 字节时间戳为止，不包含最后的 CRC8 字节。
 
 同步和 CRC8 校验通过后，接收节点会继续做业务过滤：
 
@@ -59,8 +62,8 @@ EB 90 + 1字节帧类型 + 1字节源ID + 1字节目的ID + 数据区 + 1字节C
 
 因此默认结构是：
 
-- `fc_tm_serial_recv`：`EB 90 + 帧类型1字节 + 源ID1字节 + 目的ID1字节 + 数据58字节 + CRC8 1字节`
-- `c_tc_serial_recv` 和 `l_tc_serial_recv`：`EB 90 + 帧类型1字节 + 源ID1字节 + 目的ID1字节 + 数据26字节 + CRC8 1字节`
+- `fc_tm_serial_recv`：`EB 90 + 帧类型1字节 + 源ID1字节 + 目的ID1字节 + 数据57字节 + 时间戳1字节 + CRC8 1字节`
+- `c_tc_serial_recv` 和 `l_tc_serial_recv`：`EB 90 + 帧类型1字节 + 源ID1字节 + 目的ID1字节 + 数据25字节 + 时间戳1字节 + CRC8 1字节`
 
 ## 运行
 
@@ -213,9 +216,9 @@ sudo usermod -aG dialout $USER
 消息类型：`interfaces/msg/SyncedFrame`
 
 - `frame_data`：完整原始帧，长度由对应节点决定
-- `timestamp_ns`：本地接收时间戳，单位纳秒
+- `timestamp_ns`：本地接收时间戳，单位纳秒，不是串口帧内的 1 字节协议时间戳
 
-`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。只有通过目的 ID 和帧类型过滤的帧会被发布。
+`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。完整原始帧中包含 CRC 前的 1 字节协议时间戳。只有通过目的 ID 和帧类型过滤的帧会被发布。
 
 ## 常见问题
 

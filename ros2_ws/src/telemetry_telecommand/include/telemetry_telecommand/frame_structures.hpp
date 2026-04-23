@@ -12,6 +12,7 @@ namespace telemetry_telecommand
 // 固定帧头，用于在串口字节流中识别帧边界。
 constexpr std::array<uint8_t, 2> FRAME_HEADER{0xEB, 0x90};
 constexpr std::size_t FRAME_CRC8_LENGTH = 1;
+constexpr std::size_t FRAME_PROTOCOL_TIMESTAMP_LENGTH = 1;
 constexpr std::size_t FRAME_TYPE_OFFSET = FRAME_HEADER.size();
 constexpr std::size_t FRAME_SOURCE_ID_OFFSET = FRAME_TYPE_OFFSET + 1;
 constexpr std::size_t FRAME_DESTINATION_ID_OFFSET = FRAME_SOURCE_ID_OFFSET + 1;
@@ -35,6 +36,28 @@ constexpr Crc8Config CRC8_SAE_J1850{0x1D, 0xFF, 0xFF, false, false};
 inline std::size_t payload_length_for(std::size_t frame_length)
 {
   return frame_length - FRAME_HEADER.size() - FRAME_CRC8_LENGTH;
+}
+
+inline std::size_t minimum_frame_length()
+{
+  return FRAME_HEADER.size() +
+         FRAME_ROUTE_FIELDS_LENGTH +
+         FRAME_PROTOCOL_TIMESTAMP_LENGTH +
+         FRAME_CRC8_LENGTH;
+}
+
+inline std::size_t data_area_length_for(std::size_t frame_length)
+{
+  return frame_length -
+         FRAME_HEADER.size() -
+         FRAME_ROUTE_FIELDS_LENGTH -
+         FRAME_PROTOCOL_TIMESTAMP_LENGTH -
+         FRAME_CRC8_LENGTH;
+}
+
+inline std::size_t protocol_timestamp_offset_for(std::size_t frame_length)
+{
+  return frame_length - FRAME_CRC8_LENGTH - FRAME_PROTOCOL_TIMESTAMP_LENGTH;
 }
 
 inline std::size_t search_buffer_size_for(std::size_t frame_length)
@@ -103,6 +126,11 @@ inline uint8_t source_id(const uint8_t * data)
 inline uint8_t destination_id(const uint8_t * data)
 {
   return data[FRAME_DESTINATION_ID_OFFSET];
+}
+
+inline uint8_t protocol_timestamp(const uint8_t * data, std::size_t frame_length)
+{
+  return data[protocol_timestamp_offset_for(frame_length)];
 }
 
 inline uint8_t calculate_crc8(
