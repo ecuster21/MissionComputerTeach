@@ -2,11 +2,13 @@
 #define TELEMETRY_TELECOMMAND__FIXED_FRAME_SERIAL_RECEIVER_HPP_
 
 #include <atomic>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include <interfaces/msg/synced_frame.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "telemetry_telecommand/frame_structures.hpp"
@@ -29,7 +31,10 @@ private:
   bool initialize_serial();
   void close_serial();
   void receive_data();
+  bool should_process_frame(const std::vector<uint8_t> & frame) const;
   void publish_frame(const std::vector<uint8_t> & frame);
+  rcl_interfaces::msg::SetParametersResult handle_parameter_update(
+    const std::vector<rclcpp::Parameter> & parameters);
 
   PosixSerialPort serial_port_;
   std::string port_name_;
@@ -39,7 +44,11 @@ private:
   std::size_t search_buffer_size_;
   std::string crc8_variant_name_;
   Crc8Config crc8_config_{CRC8_STANDARD};
+  std::vector<uint8_t> destination_ids_;
+  std::vector<uint8_t> handled_frame_types_;
+  mutable std::mutex filter_mutex_;
   rclcpp::Publisher<interfaces::msg::SyncedFrame>::SharedPtr frame_publisher_;
+  rclcpp::Node::OnSetParametersCallbackHandle::SharedPtr parameter_callback_handle_;
   std::atomic<bool> stop_requested_{false};
   std::thread receive_thread_;
 };

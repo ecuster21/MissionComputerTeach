@@ -18,6 +18,8 @@
 
 它们都复用同一个 `FixedFrameSerialReceiver`，只是默认参数不同。
 
+帧布局为 `EB 90 + frame_type + source_id + destination_id + data + CRC8`。同步和 CRC8 校验通过后，接收节点还会按 `destination_ids` 和 `handled_frame_types` 参数过滤，通过后才发布。
+
 ## 文件说明
 
 - [01_总流程.md](/home/zkxt/MissionComputer/docs/frame_sync/01_总流程.md)

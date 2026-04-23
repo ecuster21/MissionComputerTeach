@@ -11,6 +11,8 @@ def generate_launch_description():
     baud_rate = LaunchConfiguration("baud_rate")
     timeout_ms = LaunchConfiguration("timeout_ms")
     crc8_variant = LaunchConfiguration("crc8_variant")
+    destination_ids = LaunchConfiguration("destination_ids")
+    handled_frame_types = LaunchConfiguration("handled_frame_types")
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -43,6 +45,19 @@ def generate_launch_description():
             default_value="crc8",
             description="CRC-8 variant used by all three serial receiver nodes.",
         ),
+        DeclareLaunchArgument(
+            "destination_ids",
+            default_value="",
+            description=(
+                "Comma-separated destination UAV IDs accepted by all receivers. "
+                "Empty means any destination ID."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "handled_frame_types",
+            default_value="0C,0D,10,11",
+            description="Comma-separated frame types handled by all receivers, interpreted as hex bytes.",
+        ),
         Node(
             package="telemetry_telecommand",
             executable="fc_tm_serial_recv",
@@ -53,6 +68,8 @@ def generate_launch_description():
                 "baud_rate": baud_rate,
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
+                "destination_ids": destination_ids,
+                "handled_frame_types": handled_frame_types,
             }],
         ),
         Node(
@@ -65,6 +82,8 @@ def generate_launch_description():
                 "baud_rate": baud_rate,
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
+                "destination_ids": destination_ids,
+                "handled_frame_types": handled_frame_types,
             }],
         ),
         Node(
@@ -77,6 +96,8 @@ def generate_launch_description():
                 "baud_rate": baud_rate,
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
+                "destination_ids": destination_ids,
+                "handled_frame_types": handled_frame_types,
             }],
         ),
         Node(

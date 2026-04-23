@@ -2,9 +2,9 @@
 
 基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点，以及 1 个用于整套联调的一键启动文件：
 
-- `fc_tm_serial_recv`：默认接收 `/dev/ttyS7`，固定 `64` 字节帧
-- `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，固定 `32` 字节帧
-- `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，固定 `32` 字节帧
+- `fc_tm_serial_recv`：默认接收 `/dev/ttyS7`，对应PC端`COM1`,固定 `64` 字节帧
+- `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，固定 `32` ，对应PC端`COM6`,字节帧
+- `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，固定 `32` ，对应PC端`COM7`,字节帧
 - `frame_visualizer`：订阅接收到的完整帧并以十六进制打印
 - `multi_serial_visualizers.launch.py`：同时启动 3 个串口接收节点和 3 个对应的可视化节点
 
@@ -31,11 +31,25 @@ source install/setup.bash
 所有接收节点都按下面这套协议做同步与校验：
 
 - 帧头固定：`0xEB 0x90`
+- 帧头后 3 个字节依次是：`frame_type`、`source_id`、`destination_id`
 - 校验类型：`CRC8`
 - 支持的 CRC8 变体：
   - `crc8`
   - `maxim`
   - `sae_j1850`
+
+完整帧布局：
+
+```text
+EB 90 + 1字节帧类型 + 1字节源ID + 1字节目的ID + 数据区 + 1字节CRC8
+```
+
+同步和 CRC8 校验通过后，接收节点会继续做业务过滤：
+
+- `destination_id` 必须命中 `destination_ids`
+- `frame_type` 必须命中 `handled_frame_types`
+- `destination_ids` 为空时表示接收任意目的 ID，适合尚未配置本机号的联调阶段
+- `handled_frame_types` 为空时表示接收任意帧类型
 
 不同节点的默认帧长：
 
@@ -43,10 +57,10 @@ source install/setup.bash
 - `c_tc_serial_recv`：`32` 字节
 - `l_tc_serial_recv`：`32` 字节
 
-因此：
+因此默认结构是：
 
-- `fc_tm_serial_recv` 的默认帧结构是 `EB 90 + 61字节数据 + 1字节CRC8`
-- `c_tc_serial_recv` 和 `l_tc_serial_recv` 的默认帧结构是 `EB 90 + 29字节数据 + 1字节CRC8`
+- `fc_tm_serial_recv`：`EB 90 + 帧类型1字节 + 源ID1字节 + 目的ID1字节 + 数据58字节 + CRC8 1字节`
+- `c_tc_serial_recv` 和 `l_tc_serial_recv`：`EB 90 + 帧类型1字节 + 源ID1字节 + 目的ID1字节 + 数据26字节 + CRC8 1字节`
 
 ## 运行
 
@@ -82,7 +96,9 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py \
   l_tc_port:=/dev/ttyS4 \
   baud_rate:=115200 \
   timeout_ms:=100 \
-  crc8_variant:=crc8
+  crc8_variant:=crc8 \
+  destination_ids:=1 \
+  handled_frame_types:=0C,0D,10,11
 ```
 
 ### 手动分别启动
@@ -98,6 +114,14 @@ cd /home/zkxt/MissionComputer/ros2_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ros2 run telemetry_telecommand fc_tm_serial_recv
+```
+
+如果要在手动启动时指定本机号和帧类型：
+
+```bash
+ros2 run telemetry_telecommand fc_tm_serial_recv --ros-args \
+  -p destination_ids:=1 \
+  -p handled_frame_types:=0C,0D,10,11
 ```
 
 `c_tc_serial_recv`
@@ -164,6 +188,10 @@ sudo usermod -aG dialout $USER
 
 - `baud_rate`：默认 `115200`
 - `timeout_ms`：默认 `100`
+- `destination_ids`：目的 ID 过滤列表，默认空字符串，表示任意目的 ID
+- `handled_frame_types`：需要处理的帧类型列表，默认 `0C,0D,10,11`
+
+这两个过滤参数支持字符串、单个整数或整数数组。字符串写法中，`destination_ids` 默认按十进制解析，支持用 `0x` 写十六进制；`handled_frame_types` 默认按十六进制解析。多个值可以用逗号、空格或分号分隔，例如 `destination_ids:=1,2,0x24`、`handled_frame_types:=0C,0D,10,11`。整数数组写法可以用 `destination_ids:=[1,2,36]`。注意帧类型 `0D` 的第一位是数字 `0`。
 
 `frame_visualizer` 支持：
 
@@ -177,6 +205,8 @@ sudo usermod -aG dialout $USER
 - `baud_rate`：默认 `115200`
 - `timeout_ms`：默认 `100`
 - `crc8_variant`：默认 `crc8`
+- `destination_ids`：默认空字符串
+- `handled_frame_types`：默认 `0C,0D,10,11`
 
 ## 发布消息
 
@@ -185,7 +215,7 @@ sudo usermod -aG dialout $USER
 - `frame_data`：完整原始帧，长度由对应节点决定
 - `timestamp_ns`：本地接收时间戳，单位纳秒
 
-`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。
+`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。只有通过目的 ID 和帧类型过滤的帧会被发布。
 
 ## 常见问题
 

@@ -52,3 +52,32 @@
 
 - 重新构建并运行 launch，确认 `fc_tm_serial_recv` 和 `fc_tm_frame_visualizer` 正常启动
 - 若外部脚本仍使用旧参数 `tm_port` 或旧话题 `tm_synced_frame`，同步更新为 `fc_tm_port` 和 `fc_tm_synced_frame`
+
+## 2026-04-23
+
+### 这次做了什么
+
+- 明确帧头后 3 字节为帧类型、源 ID、目的 ID
+- 在同步和 CRC8 校验通过后新增目的 ID 与帧类型过滤
+- 新增可配置参数 `destination_ids` 和 `handled_frame_types`，支持启动时配置和运行时参数更新，参数值可写字符串、单个整数或整数数组
+- 默认处理帧类型为 `0C,0D,10,11`，目的 ID 默认空表示联调阶段接收任意目的 ID
+
+### 改了哪些文件
+
+- `README.md`
+- `Memory.md`
+- `Log.md`
+- `docs/codex_start_prompt.md`
+- `docs/frame_sync/README.md`
+- `docs/frame_sync/01_总流程.md`
+- `docs/frame_sync/03_已同步后处理.md`
+- `docs/frame_sync/04_校验失败重同步.md`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/fixed_frame_serial_receiver.hpp`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/frame_structures.hpp`
+- `ros2_ws/src/telemetry_telecommand/launch/multi_serial_visualizers.launch.py`
+- `ros2_ws/src/telemetry_telecommand/src/fixed_frame_serial_receiver.cpp`
+
+### 下一步做什么
+
+- 实机运行时传入本机机号，例如 `destination_ids:=1`
+- 后续新增需要处理的帧类型时，只更新 `handled_frame_types` 参数

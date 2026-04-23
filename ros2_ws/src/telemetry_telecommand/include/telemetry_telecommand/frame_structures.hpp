@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace telemetry_telecommand
 {
@@ -11,6 +12,10 @@ namespace telemetry_telecommand
 // 固定帧头，用于在串口字节流中识别帧边界。
 constexpr std::array<uint8_t, 2> FRAME_HEADER{0xEB, 0x90};
 constexpr std::size_t FRAME_CRC8_LENGTH = 1;
+constexpr std::size_t FRAME_TYPE_OFFSET = FRAME_HEADER.size();
+constexpr std::size_t FRAME_SOURCE_ID_OFFSET = FRAME_TYPE_OFFSET + 1;
+constexpr std::size_t FRAME_DESTINATION_ID_OFFSET = FRAME_SOURCE_ID_OFFSET + 1;
+constexpr std::size_t FRAME_ROUTE_FIELDS_LENGTH = 3;
 constexpr std::size_t FC_TM_FRAME_LENGTH = 64;
 constexpr std::size_t TC_FRAME_LENGTH = 32;
 
@@ -83,6 +88,21 @@ inline bool has_valid_header(const uint8_t * data, std::size_t frame_length)
   return frame_length >= FRAME_HEADER.size() &&
          data[0] == FRAME_HEADER[0] &&
          data[1] == FRAME_HEADER[1];
+}
+
+inline uint8_t frame_type(const uint8_t * data)
+{
+  return data[FRAME_TYPE_OFFSET];
+}
+
+inline uint8_t source_id(const uint8_t * data)
+{
+  return data[FRAME_SOURCE_ID_OFFSET];
+}
+
+inline uint8_t destination_id(const uint8_t * data)
+{
+  return data[FRAME_DESTINATION_ID_OFFSET];
 }
 
 inline uint8_t calculate_crc8(
