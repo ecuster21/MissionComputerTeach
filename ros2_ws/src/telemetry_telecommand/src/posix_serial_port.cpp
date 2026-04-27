@@ -109,6 +109,7 @@ std::size_t PosixSerialPort::read(uint8_t * buffer, std::size_t size) const
     throw std::runtime_error("Serial port is not open");
   }
 
+  // 返回值可能小于请求长度，固定帧接收层会负责继续补齐。
   const auto result = ::read(fd_, buffer, size);
   if (result < 0) {
     throw std::runtime_error(last_error_message("Serial read failed"));
@@ -145,12 +146,15 @@ void PosixSerialPort::configure_port() const
 
   // 使用原始模式，避免内核修改遥测字节流内容。
   cfmakeraw(&tty);
+  // CLOCAL 避免调制解调器控制线影响打开状态，CREAD 开启接收器。
   tty.c_cflag |= (CLOCAL | CREAD);
+  // 明确关闭硬件流控、校验位和双停止位，协议统一使用 8N1。
   tty.c_cflag &= ~CSTOPB;
   tty.c_cflag &= ~CRTSCTS;
   tty.c_cflag &= ~PARENB;
   tty.c_cflag &= ~CSIZE;
   tty.c_cflag |= CS8;
+  // VMIN=0 搭配 VTIME 让 read 可以超时返回 0，接收线程据此让出 CPU。
   tty.c_cc[VMIN] = 0;
   // termios 的超时单位是十分之一秒。
   tty.c_cc[VTIME] = static_cast<cc_t>((timeout_ms_ + 99U) / 100U);

@@ -23,6 +23,7 @@ void consume_bytes(
   std::size_t & bytes_in_buffer,
   std::size_t count)
 {
+  // 保留未消费的尾部字节，便于下一轮继续拼接串口流。
   if (count >= bytes_in_buffer) {
     bytes_in_buffer = 0;
     return;
@@ -38,6 +39,7 @@ bool try_find_sync(
   std::size_t frame_length,
   std::size_t & offset)
 {
+  // 同时确认当前位置和下一帧位置都是 EB90，降低数据区误含 EB90 时的误同步概率。
   if (bytes_in_buffer < frame_length + FRAME_HEADER.size()) {
     offset = 0;
     return false;
@@ -65,6 +67,7 @@ bool read_exact(
   std::size_t size,
   const std::atomic<bool> & stop_requested)
 {
+  // 串口 read 可能按任意分片返回，这里持续补读直到凑满一帧。
   std::size_t total_read = 0;
   while (total_read < size && rclcpp::ok() && !stop_requested.load()) {
     const auto bytes_read = serial_port.read(buffer + total_read, size - total_read);
@@ -80,6 +83,7 @@ bool read_exact(
 
 std::string normalize_crc8_variant_name(std::string variant_name)
 {
+  // 参数允许用户写 crc-8 / crc8 / CRC8 等近似形式，内部统一成小写下划线。
   std::transform(
     variant_name.begin(),
     variant_name.end(),
@@ -176,6 +180,7 @@ std::vector<uint8_t> parse_uint8_list(
   int default_base,
   const std::string & parameter_name)
 {
+  // 字符串参数兼容 "1,2,0x24"、"[1, 2, 36]" 和 "0C 0D 10 11" 等写法。
   std::string normalized = parameter_text;
   for (auto & ch : normalized) {
     if (ch == ',' || ch == ';' || ch == '[' || ch == ']' || ch == '\'' || ch == '"') {
@@ -211,6 +216,7 @@ std::vector<uint8_t> parse_uint8_list_parameter(
   int default_base,
   const std::string & parameter_name)
 {
+  // launch/ros2 param 可能把同一个配置解析成字符串、整数或整数数组，这里统一收敛为字节列表。
   std::vector<uint8_t> values;
 
   switch (parameter.get_type()) {
@@ -276,6 +282,7 @@ void log_validation_failure_details(
   std::size_t frame_length,
   const std::string & configured_variant)
 {
+  // 同时打印几种常用 CRC8 计算结果，便于现场快速判断是不是 CRC 变体配错。
   const auto received_crc = encoded_crc8(frame.data(), frame_length);
   const auto crc_standard = calculate_crc8(frame.data(), frame_length, CRC8_STANDARD);
   const auto crc_maxim = calculate_crc8(frame.data(), frame_length, CRC8_MAXIM);
@@ -324,6 +331,7 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     flexible_byte_list_descriptor);
   const auto topic_name = this->declare_parameter<std::string>("topic", default_topic);
 
+  // 当前协议要求 CRC 前至少有协议时间戳，避免配置出过短帧导致越界解析。
   if (frame_length_ < minimum_frame_length()) {
     throw std::invalid_argument(
       "frame_length must contain header + frame_type + source_id + destination_id + "
@@ -441,6 +449,7 @@ void FixedFrameSerialReceiver::receive_data()
 
   while (rclcpp::ok() && !stop_requested_.load()) {
     if (!serial_port_.is_open()) {
+      // 支持串口设备热插拔或启动顺序晚于节点启动的情况。
       if (!initialize_serial()) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
         continue;
@@ -453,6 +462,7 @@ void FixedFrameSerialReceiver::receive_data()
     try {
       if (!is_synced) {
         if (bytes_in_buffer == search_buffer_size_) {
+          // 搜索窗口已满仍未同步时，丢弃最旧的一帧长度，继续等待新数据进入窗口。
           consume_bytes(buffer, bytes_in_buffer, frame_length_);
         }
 
@@ -469,6 +479,7 @@ void FixedFrameSerialReceiver::receive_data()
           continue;
         }
 
+        // 找到可信同步点后，移除同步点之前的噪声字节。
         consume_bytes(buffer, bytes_in_buffer, offset);
         is_synced = true;
         RCLCPP_INFO(this->get_logger(), "Frame synchronization established.");
@@ -476,6 +487,7 @@ void FixedFrameSerialReceiver::receive_data()
 
       while (is_synced && rclcpp::ok() && !stop_requested_.load()) {
         if (bytes_in_buffer == 0) {
+          // 已同步且没有遗留缓冲时，直接按固定帧长从串口精确读取一帧。
           std::vector<uint8_t> frame(frame_length_, 0U);
           if (!read_exact(serial_port_, frame.data(), frame_length_, stop_requested_)) {
             return;
@@ -485,6 +497,7 @@ void FixedFrameSerialReceiver::receive_data()
             has_valid_header(frame.data(), frame_length_) &&
             validate_crc8(frame.data(), frame_length_, crc8_config_))
           {
+            // 有效帧可能发给其他机号或属于暂不处理的类型，此时保持同步但不发布。
             if (should_process_frame(frame)) {
               publish_frame(frame);
             }
@@ -496,6 +509,7 @@ void FixedFrameSerialReceiver::receive_data()
             frame,
             frame_length_,
             crc8_variant_name_);
+          // 失败帧复制回搜索缓冲，下一轮从其中重新寻找同步点。
           std::copy(frame.begin(), frame.end(), buffer.begin());
           bytes_in_buffer = frame_length_;
           is_synced = false;
@@ -503,6 +517,7 @@ void FixedFrameSerialReceiver::receive_data()
         }
 
         if (bytes_in_buffer < frame_length_) {
+          // 缓冲区里已有部分同步数据时，继续补到至少一帧再切帧。
           const auto bytes_read =
             serial_port_.read(buffer.data() + bytes_in_buffer, frame_length_ - bytes_in_buffer);
           if (bytes_read == 0) {
@@ -520,8 +535,9 @@ void FixedFrameSerialReceiver::receive_data()
 
         if (
           has_valid_header(frame.data(), frame_length_) &&
-          validate_crc8(frame.data(), frame_length_, crc8_config_))
+            validate_crc8(frame.data(), frame_length_, crc8_config_))
         {
+          // 从用户态缓冲区切出的有效帧同样要先经过业务过滤。
           if (should_process_frame(frame)) {
             publish_frame(frame);
           }
@@ -534,6 +550,7 @@ void FixedFrameSerialReceiver::receive_data()
           frame,
           frame_length_,
           crc8_variant_name_);
+        // 缓冲模式下校验失败时只滑动 1 字节，避免错过紧随其后的真实帧头。
         consume_bytes(buffer, bytes_in_buffer, 1);
 
         std::size_t offset = 0;
@@ -560,6 +577,7 @@ void FixedFrameSerialReceiver::receive_data()
 
 bool FixedFrameSerialReceiver::should_process_frame(const std::vector<uint8_t> & frame) const
 {
+  // 过滤依据来自协议头部固定位置，不解析数据区内容。
   const auto type = frame_type(frame.data());
   const auto source = source_id(frame.data());
   const auto destination = destination_id(frame.data());
@@ -599,6 +617,7 @@ void FixedFrameSerialReceiver::publish_frame(const std::vector<uint8_t> & frame)
 rcl_interfaces::msg::SetParametersResult FixedFrameSerialReceiver::handle_parameter_update(
   const std::vector<rclcpp::Parameter> & parameters)
 {
+  // 先在临时变量里完成解析，只有全部参数合法时才一次性替换当前过滤表。
   std::vector<uint8_t> next_destination_ids;
   std::vector<uint8_t> next_handled_frame_types;
 

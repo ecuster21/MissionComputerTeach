@@ -105,3 +105,84 @@
 
 - 使用新的 PC 端测试脚本发送含 1 字节协议时间戳的帧
 - 实机观察可视化输出，确认 CRC 校验和目的 ID、帧类型过滤都正常
+
+## 2026-04-23
+
+### 这次做了什么
+
+- 新增 `serial_storage` 存储节点，订阅 `fc_tm_synced_frame`、`c_tc_synced_frame`、`l_tc_synced_frame`
+- 使用两个 `4096` 字节缓冲区按消息到达顺序缓存 `frame_data`
+- 缓冲区满后交给后台线程写入同一个存储文件，节点退出时刷新剩余数据
+- 将 `serial_storage` 接入 CMake 构建和 `multi_serial_visualizers.launch.py`
+
+### 改了哪些文件
+
+- `README.md`
+- `Memory.md`
+- `Log.md`
+- `docs/codex_start_prompt.md`
+- `ros2_ws/src/telemetry_telecommand/CMakeLists.txt`
+- `ros2_ws/src/telemetry_telecommand/launch/multi_serial_visualizers.launch.py`
+- `ros2_ws/src/telemetry_telecommand/src/serial_storage.cpp`
+
+### 下一步做什么
+
+- 实机启动 launch，确认生成 `serial_storage.bin`
+- 根据实际落盘路径需要调整 `storage_file` 参数
+
+## 2026-04-27
+
+### 这次做了什么
+
+- 给项目核心源码补充中文注释，说明协议字段、同步策略、过滤逻辑、串口配置和双缓存存储流程
+- 给 `fc_tm/c_tc/l_tc` 三个入口节点补充默认通道职责说明
+- 给 `frame_visualizer` 和 `serial_storage` 补充节点行为边界说明
+
+### 改了哪些文件
+
+- `Log.md`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/fixed_frame_serial_receiver.hpp`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/frame_structures.hpp`
+- `ros2_ws/src/telemetry_telecommand/src/fixed_frame_serial_receiver.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/serial_storage.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/posix_serial_port.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/frame_visualizer.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/fc_tm_serial_recv.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/c_tc_serial_recv.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/l_tc_serial_recv.cpp`
+
+### 下一步做什么
+
+- 后续协议字段或存储格式变化时，继续同步更新相邻注释和 README
+
+## 2026-04-27
+
+### 这次做了什么
+
+- 整理 `docs/` 目录，将流程图统一移动到 `docs/flows/`
+- 将原 `docs/frame_sync/` 下 5 张过细流程图合并为 3 张：整体链路、固定帧接收、双缓存存储
+- 将 Codex 启动提示词移动到 `docs/prompts/`
+- 删除旧的 `docs/frame_sync/` 文档文件，减少重复维护点
+
+### 改了哪些文件
+
+- `README.md`
+- `Memory.md`
+- `Log.md`
+- `docs/README.md`
+- `docs/flows/README.md`
+- `docs/flows/serial_pipeline.md`
+- `docs/flows/receiver_sync.md`
+- `docs/flows/storage_double_buffer.md`
+- `docs/prompts/README.md`
+- `docs/prompts/codex_start_prompt.md`
+- `docs/frame_sync/README.md`
+- `docs/frame_sync/01_总流程.md`
+- `docs/frame_sync/02_寻找同步点.md`
+- `docs/frame_sync/03_已同步后处理.md`
+- `docs/frame_sync/04_校验失败重同步.md`
+- `docs/frame_sync/05_字节流示例.md`
+
+### 下一步做什么
+
+- 后续新增文档时，优先判断是否能归入 `flows/` 或 `prompts/`，避免过早拆分目录

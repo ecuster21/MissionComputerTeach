@@ -81,12 +81,25 @@ ament_target_dependencies(frame_visualizer
   rclcpp
 )
 
+add_executable(serial_storage
+  src/serial_storage.cpp
+)
+target_include_directories(serial_storage
+  PRIVATE
+    include
+)
+ament_target_dependencies(serial_storage
+  interfaces
+  rclcpp
+)
+
 install(TARGETS
   serial_support
   fc_tm_serial_recv
   c_tc_serial_recv
   l_tc_serial_recv
   frame_visualizer
+  serial_storage
   DESTINATION lib/${PROJECT_NAME}
 )
 

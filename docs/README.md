@@ -4,18 +4,17 @@
 
 ## 当前文档
 
-- [codex_start_prompt.md](/home/zkxt/MissionComputer/docs/codex_start_prompt.md)
-  给 Codex 的项目启动提示词模板，适合在正式开发前作为开场提示
-- [frame_sync/README.md](/home/zkxt/MissionComputer/docs/frame_sync/README.md)
-  当前公共接收类 `FixedFrameSerialReceiver` 的帧同步算法说明与图解入口
+- [flows/README.md](/home/zkxt/MissionComputer/docs/flows/README.md)
+  当前运行链路、固定帧接收和双缓存存储的 Mermaid 流程图入口
+- [prompts/README.md](/home/zkxt/MissionComputer/docs/prompts/README.md)
+  项目协作提示词入口
 
-## 后续建议放这里的内容
+## 目录划分
 
-- 协议说明
-- 调试记录
-- 联调步骤
-- 部署说明
-- 设计决策文档
+- `flows/`：只放对理解系统运行有帮助的流程图。当前保留 3 张图：整体链路、接收同步、双缓存存储。
+- `prompts/`：只放项目协作提示词。
+
+暂时不再拆更多目录；后续如果协议说明、联调步骤或部署说明变多，再新增对应专题目录。
 
 ## 维护约定
 

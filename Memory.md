@@ -19,4 +19,6 @@
 
 - 当前项目基于 ROS 2 Jazzy 与 `colcon` 工作流
 - 主工作区位于 `ros2_ws/`
+- `docs/` 当前按 `flows/` 和 `prompts/` 两类组织；流程图集中放在 `docs/flows/`
 - 当前串口协议默认为固定帧头 `0xEB 0x90`，后接 `frame_type`、`source_id`、`destination_id`、数据区、1 字节协议时间戳和 CRC8，固定总长 `64` 或 `32` 字节，并支持按目的 ID 与帧类型过滤
+- `serial_storage` 节点订阅 3 路过滤后的 `SyncedFrame.frame_data`，使用双 4KB 缓冲区按到达顺序写入单个文件

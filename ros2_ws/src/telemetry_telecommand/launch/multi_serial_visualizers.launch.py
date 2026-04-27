@@ -13,6 +13,8 @@ def generate_launch_description():
     crc8_variant = LaunchConfiguration("crc8_variant")
     destination_ids = LaunchConfiguration("destination_ids")
     handled_frame_types = LaunchConfiguration("handled_frame_types")
+    storage_file = LaunchConfiguration("storage_file")
+    truncate_storage_file = LaunchConfiguration("truncate_storage_file")
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -57,6 +59,16 @@ def generate_launch_description():
             "handled_frame_types",
             default_value="0C,0D,10,11",
             description="Comma-separated frame types handled by all receivers, interpreted as hex bytes.",
+        ),
+        DeclareLaunchArgument(
+            "storage_file",
+            default_value="serial_storage.bin",
+            description="Single output file written by serial_storage.",
+        ),
+        DeclareLaunchArgument(
+            "truncate_storage_file",
+            default_value="true",
+            description="Whether serial_storage truncates the output file when it starts.",
         ),
         Node(
             package="telemetry_telecommand",
@@ -125,6 +137,19 @@ def generate_launch_description():
             output="screen",
             parameters=[{
                 "topic": "l_tc_synced_frame",
+            }],
+        ),
+        Node(
+            package="telemetry_telecommand",
+            executable="serial_storage",
+            name="serial_storage",
+            output="screen",
+            parameters=[{
+                "storage_file": storage_file,
+                "truncate_file": truncate_storage_file,
+                "fc_tm_topic": "fc_tm_synced_frame",
+                "c_tc_topic": "c_tc_synced_frame",
+                "l_tc_topic": "l_tc_synced_frame",
             }],
         ),
     ])

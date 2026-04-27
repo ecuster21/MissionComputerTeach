@@ -14,6 +14,7 @@ public:
   {
     // 允许通过命令行参数覆盖订阅话题名。
     const auto topic_name = this->declare_parameter<std::string>("topic", "fc_tm_synced_frame");
+    // 只订阅单一路话题；需要看多路时由 launch 启动多个同类节点并传入不同 topic。
     frame_subscriber_ = this->create_subscription<interfaces::msg::SyncedFrame>(
       topic_name,
       10,
@@ -29,6 +30,7 @@ private:
     std::ostringstream output;
     output << "Received frame at " << msg->timestamp_ns << " ns";
 
+    // 这里不解析协议字段，保持为纯十六进制观察工具，方便排查原始帧内容。
     for (std::size_t i = 0; i < msg->frame_data.size(); ++i) {
       if (i % bytes_per_row == 0) {
         output << '\n' << std::setw(4) << std::setfill(' ') << i << ": ";

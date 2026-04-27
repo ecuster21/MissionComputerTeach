@@ -1,12 +1,13 @@
 # MissionComputer
 
-基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点，以及 1 个用于整套联调的一键启动文件：
+基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点、1 个存储节点，以及 1 个用于整套联调的一键启动文件：
 
-- `fc_tm_serial_recv`：默认接收 `/dev/ttyS7`，对应PC端`COM1`,固定 `64` 字节帧
-- `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，固定 `32` ，对应PC端`COM6`,字节帧
-- `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，固定 `32` ，对应PC端`COM7`,字节帧
+- `fc_tm_serial_recv`：默认接收 `/dev/ttyS7`，对应 PC 端 `COM1`，固定 `64` 字节帧
+- `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，对应 PC 端 `COM6`，固定 `32` 字节帧
+- `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，对应 PC 端 `COM7`，固定 `32` 字节帧
 - `frame_visualizer`：订阅接收到的完整帧并以十六进制打印
-- `multi_serial_visualizers.launch.py`：同时启动 3 个串口接收节点和 3 个对应的可视化节点
+- `serial_storage`：订阅 3 路过滤后的完整帧，使用两个 4KB 缓冲区按到达顺序写入同一个存储文件
+- `multi_serial_visualizers.launch.py`：同时启动 3 个串口接收节点、3 个对应的可视化节点和 1 个存储节点
 
 这 3 个接收节点共用同一套串口同步与 CRC8 校验逻辑，只是默认串口、默认帧长和默认发布话题不同。
 
@@ -25,6 +26,12 @@ source /opt/ros/jazzy/setup.bash
 colcon build --packages-select interfaces telemetry_telecommand
 source install/setup.bash
 ```
+
+## 文档
+
+- [docs/README.md](/home/zkxt/MissionComputer/docs/README.md)：文档目录总览
+- [docs/flows/README.md](/home/zkxt/MissionComputer/docs/flows/README.md)：运行链路、接收同步和双缓存存储流程图
+- [docs/prompts/README.md](/home/zkxt/MissionComputer/docs/prompts/README.md)：项目协作提示词
 
 ## 当前协议
 
@@ -67,7 +74,7 @@ CRC8 计算范围是从帧头 `EB 90` 到 1 字节时间戳为止，不包含最
 
 ## 运行
 
-推荐直接使用 launch 文件一次启动 3 路串口接收和 3 路显示。
+推荐直接使用 launch 文件一次启动 3 路串口接收、3 路显示和 1 路存储。
 
 ### 一键启动
 
@@ -86,6 +93,7 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py
 - `fc_tm_frame_visualizer`，订阅 `fc_tm_synced_frame`
 - `c_tc_frame_visualizer`，订阅 `c_tc_synced_frame`
 - `l_tc_frame_visualizer`，订阅 `l_tc_synced_frame`
+- `serial_storage`，订阅上述 3 个话题并写入单个存储文件
 
 如果需要改串口或公共参数，可以直接覆盖 launch 参数：
 
@@ -101,7 +109,8 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py \
   timeout_ms:=100 \
   crc8_variant:=crc8 \
   destination_ids:=1 \
-  handled_frame_types:=0C,0D,10,11
+  handled_frame_types:=0C,0D,10,11 \
+  storage_file:=serial_storage.bin
 ```
 
 ### 手动分别启动
@@ -156,6 +165,16 @@ source install/setup.bash
 ros2 run telemetry_telecommand frame_visualizer --ros-args -p topic:=fc_tm_synced_frame
 ```
 
+如果只启动存储节点：
+
+```bash
+cd /home/zkxt/MissionComputer/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run telemetry_telecommand serial_storage --ros-args \
+  -p storage_file:=serial_storage.bin
+```
+
 如果串口权限不足：
 
 ```bash
@@ -200,6 +219,16 @@ sudo usermod -aG dialout $USER
 
 - `topic`：订阅话题名，默认 `fc_tm_synced_frame`
 
+`serial_storage` 支持：
+
+- `storage_file`：单个输出文件路径，默认 `serial_storage.bin`
+- `truncate_file`：启动时是否清空旧文件，默认 `true`
+- `fc_tm_topic`：默认 `fc_tm_synced_frame`
+- `c_tc_topic`：默认 `c_tc_synced_frame`
+- `l_tc_topic`：默认 `l_tc_synced_frame`
+
+`serial_storage` 只存储 `SyncedFrame.frame_data` 原始帧字节，不额外写入 ROS 时间戳或话题名。3 路数据谁先到就先进入双缓存，没有固定先后顺序。内部有两个 `4096` 字节缓冲区，当前缓冲区满后交给后台线程写盘，另一个缓冲区继续接收；节点退出时会把未满 4KB 的剩余数据也刷新到同一个文件。
+
 `multi_serial_visualizers.launch.py` 支持：
 
 - `fc_tm_port`：默认 `/dev/ttyS7`
@@ -210,6 +239,8 @@ sudo usermod -aG dialout $USER
 - `crc8_variant`：默认 `crc8`
 - `destination_ids`：默认空字符串
 - `handled_frame_types`：默认 `0C,0D,10,11`
+- `storage_file`：默认 `serial_storage.bin`
+- `truncate_storage_file`：默认 `true`
 
 ## 发布消息
 
@@ -248,3 +279,4 @@ Frame validation failed.
 - 串口底层使用仓库内置的 POSIX `termios` 封装
 - 3 个接收节点都复用了同一个 `FixedFrameSerialReceiver`
 - 接收线程采用“搜索双帧头建立同步 -> 固定帧长取帧 -> 校验失败重同步”的方式工作
+- 存储节点 `serial_storage` 采用双 4KB 缓冲区和后台写盘线程，将 3 路过滤后的 `frame_data` 合并写入单个文件

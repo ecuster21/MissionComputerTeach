@@ -13,10 +13,12 @@ namespace telemetry_telecommand
 constexpr std::array<uint8_t, 2> FRAME_HEADER{0xEB, 0x90};
 constexpr std::size_t FRAME_CRC8_LENGTH = 1;
 constexpr std::size_t FRAME_PROTOCOL_TIMESTAMP_LENGTH = 1;
+// 帧头之后依次是帧类型、源 ID、目的 ID；这些偏移用于过滤有效帧。
 constexpr std::size_t FRAME_TYPE_OFFSET = FRAME_HEADER.size();
 constexpr std::size_t FRAME_SOURCE_ID_OFFSET = FRAME_TYPE_OFFSET + 1;
 constexpr std::size_t FRAME_DESTINATION_ID_OFFSET = FRAME_SOURCE_ID_OFFSET + 1;
 constexpr std::size_t FRAME_ROUTE_FIELDS_LENGTH = 3;
+// 当前三路串口的固定总帧长：飞控遥测 64 字节，遥控/指令类 32 字节。
 constexpr std::size_t FC_TM_FRAME_LENGTH = 64;
 constexpr std::size_t TC_FRAME_LENGTH = 32;
 
@@ -38,6 +40,7 @@ inline std::size_t payload_length_for(std::size_t frame_length)
   return frame_length - FRAME_HEADER.size() - FRAME_CRC8_LENGTH;
 }
 
+// 最短帧至少要容纳帧头、路由字段、协议时间戳和 CRC。
 inline std::size_t minimum_frame_length()
 {
   return FRAME_HEADER.size() +
@@ -46,6 +49,7 @@ inline std::size_t minimum_frame_length()
          FRAME_CRC8_LENGTH;
 }
 
+// 数据区不包含帧头、帧类型/源/目的 ID、协议时间戳和 CRC。
 inline std::size_t data_area_length_for(std::size_t frame_length)
 {
   return frame_length -
@@ -55,16 +59,19 @@ inline std::size_t data_area_length_for(std::size_t frame_length)
          FRAME_CRC8_LENGTH;
 }
 
+// 协议时间戳位于 CRC 前 1 字节，随总帧长动态定位。
 inline std::size_t protocol_timestamp_offset_for(std::size_t frame_length)
 {
   return frame_length - FRAME_CRC8_LENGTH - FRAME_PROTOCOL_TIMESTAMP_LENGTH;
 }
 
+// 同步搜索需要同时观察当前帧头和下一帧帧头，因此至少保留两帧加 1 字节。
 inline std::size_t search_buffer_size_for(std::size_t frame_length)
 {
   return frame_length * 2 + 1;
 }
 
+// 部分 CRC8 变体需要按位反射输入或输出字节。
 inline uint8_t reflect8(uint8_t value)
 {
   uint8_t result = 0;
@@ -80,6 +87,7 @@ inline uint8_t compute_crc8(
   std::size_t length,
   const Crc8Config & config)
 {
+  // CRC 从 initial_value 开始，对每个字节做异或和 8 次多项式移位。
   uint8_t crc = config.initial_value;
   for (std::size_t i = 0; i < length; ++i) {
     const uint8_t current_byte = config.reflect_input ? reflect8(data[i]) : data[i];
@@ -138,6 +146,7 @@ inline uint8_t calculate_crc8(
   std::size_t frame_length,
   const Crc8Config & config)
 {
+  // CRC8 覆盖从 EB90 到协议时间戳的所有字节，不包含最后的 CRC 字节。
   return compute_crc8(data, frame_length - FRAME_CRC8_LENGTH, config);
 }
 
