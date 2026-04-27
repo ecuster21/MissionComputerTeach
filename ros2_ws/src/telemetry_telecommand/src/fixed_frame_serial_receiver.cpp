@@ -325,10 +325,6 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     "destination_ids",
     rclcpp::ParameterValue(""),
     flexible_byte_list_descriptor);
-  this->declare_parameter(
-    "handled_frame_types",
-    rclcpp::ParameterValue("0C,0D,10,11"),
-    flexible_byte_list_descriptor);
   const auto topic_name = this->declare_parameter<std::string>("topic", default_topic);
 
   // 当前协议要求 CRC 前至少有协议时间戳，避免配置出过短帧导致越界解析。
@@ -342,10 +338,6 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     this->get_parameter("destination_ids"),
     10,
     "destination_ids");
-  handled_frame_types_ = parse_uint8_list_parameter(
-    this->get_parameter("handled_frame_types"),
-    16,
-    "handled_frame_types");
 
   const auto * crc8_config = try_get_crc8_config(requested_crc8_variant);
   if (crc8_config == nullptr) {
@@ -376,9 +368,8 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     crc8_variant_name_.c_str());
   RCLCPP_INFO(
     this->get_logger(),
-    "Frame filter: destination_ids=%s handled_frame_types=%s.",
-    format_byte_list(destination_ids_).c_str(),
-    format_byte_list(handled_frame_types_).c_str());
+    "Frame filter: destination_ids=%s.",
+    format_byte_list(destination_ids_).c_str());
 
   if (!initialize_serial()) {
     RCLCPP_WARN(
@@ -497,7 +488,7 @@ void FixedFrameSerialReceiver::receive_data()
             has_valid_header(frame.data(), frame_length_) &&
             validate_crc8(frame.data(), frame_length_, crc8_config_))
           {
-            // 有效帧可能发给其他机号或属于暂不处理的类型，此时保持同步但不发布。
+            // 有效帧可能发给其他机号，此时保持同步但不发布。
             if (should_process_frame(frame)) {
               publish_frame(frame);
             }
@@ -537,7 +528,7 @@ void FixedFrameSerialReceiver::receive_data()
           has_valid_header(frame.data(), frame_length_) &&
             validate_crc8(frame.data(), frame_length_, crc8_config_))
         {
-          // 从用户态缓冲区切出的有效帧同样要先经过业务过滤。
+          // 从用户态缓冲区切出的有效帧同样要先经过目的 ID 过滤。
           if (should_process_frame(frame)) {
             publish_frame(frame);
           }
@@ -577,8 +568,7 @@ void FixedFrameSerialReceiver::receive_data()
 
 bool FixedFrameSerialReceiver::should_process_frame(const std::vector<uint8_t> & frame) const
 {
-  // 过滤依据来自协议头部固定位置，不解析数据区内容。
-  const auto type = frame_type(frame.data());
+  // 串口接收层只按目的 ID 过滤；帧类型过滤留给后续业务节点处理。
   const auto source = source_id(frame.data());
   const auto destination = destination_id(frame.data());
   const auto timestamp = protocol_timestamp(frame.data(), frame.size());
@@ -586,20 +576,16 @@ bool FixedFrameSerialReceiver::should_process_frame(const std::vector<uint8_t> &
   std::lock_guard<std::mutex> lock(filter_mutex_);
   const bool destination_matches =
     destination_ids_.empty() || contains_byte(destination_ids_, destination);
-  const bool type_matches =
-    handled_frame_types_.empty() || contains_byte(handled_frame_types_, type);
 
-  if (!destination_matches || !type_matches) {
+  if (!destination_matches) {
     RCLCPP_DEBUG(
       this->get_logger(),
-      "Ignoring frame: type=0x%02X source_id=0x%02X destination_id=0x%02X "
-      "timestamp=0x%02X destination_ids=%s handled_frame_types=%s.",
-      type,
+      "Ignoring frame: source_id=0x%02X destination_id=0x%02X "
+      "timestamp=0x%02X destination_ids=%s.",
       source,
       destination,
       timestamp,
-      format_byte_list(destination_ids_).c_str(),
-      format_byte_list(handled_frame_types_).c_str());
+      format_byte_list(destination_ids_).c_str());
     return false;
   }
 
@@ -619,12 +605,10 @@ rcl_interfaces::msg::SetParametersResult FixedFrameSerialReceiver::handle_parame
 {
   // 先在临时变量里完成解析，只有全部参数合法时才一次性替换当前过滤表。
   std::vector<uint8_t> next_destination_ids;
-  std::vector<uint8_t> next_handled_frame_types;
 
   {
     std::lock_guard<std::mutex> lock(filter_mutex_);
     next_destination_ids = destination_ids_;
-    next_handled_frame_types = handled_frame_types_;
   }
 
   rcl_interfaces::msg::SetParametersResult result;
@@ -637,10 +621,6 @@ rcl_interfaces::msg::SetParametersResult FixedFrameSerialReceiver::handle_parame
         filter_parameter_changed = true;
         next_destination_ids =
           parse_uint8_list_parameter(parameter, 10, "destination_ids");
-      } else if (parameter.get_name() == "handled_frame_types") {
-        filter_parameter_changed = true;
-        next_handled_frame_types =
-          parse_uint8_list_parameter(parameter, 16, "handled_frame_types");
       }
     }
   } catch (const std::exception & ex) {
@@ -656,14 +636,12 @@ rcl_interfaces::msg::SetParametersResult FixedFrameSerialReceiver::handle_parame
   {
     std::lock_guard<std::mutex> lock(filter_mutex_);
     destination_ids_ = next_destination_ids;
-    handled_frame_types_ = next_handled_frame_types;
   }
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Updated frame filter: destination_ids=%s handled_frame_types=%s.",
-    format_byte_list(next_destination_ids).c_str(),
-    format_byte_list(next_handled_frame_types).c_str());
+    "Updated frame filter: destination_ids=%s.",
+    format_byte_list(next_destination_ids).c_str());
 
   return result;
 }

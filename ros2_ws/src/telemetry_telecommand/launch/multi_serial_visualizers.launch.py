@@ -13,6 +13,8 @@ def generate_launch_description():
     crc8_variant = LaunchConfiguration("crc8_variant")
     destination_ids = LaunchConfiguration("destination_ids")
     handled_frame_types = LaunchConfiguration("handled_frame_types")
+    c_can_topic = LaunchConfiguration("c_can_topic")
+    l_can_topic = LaunchConfiguration("l_can_topic")
     storage_file = LaunchConfiguration("storage_file")
     truncate_storage_file = LaunchConfiguration("truncate_storage_file")
 
@@ -51,14 +53,27 @@ def generate_launch_description():
             "destination_ids",
             default_value="",
             description=(
-                "Comma-separated destination UAV IDs accepted by all receivers. "
+                "Comma-separated destination UAV IDs accepted by receivers and CAN extraction nodes. "
                 "Empty means any destination ID."
             ),
         ),
         DeclareLaunchArgument(
             "handled_frame_types",
             default_value="0C,0D,10,11",
-            description="Comma-separated frame types handled by all receivers, interpreted as hex bytes.",
+            description=(
+                "Comma-separated frame types handled by CAN extraction nodes, "
+                "interpreted as hex bytes."
+            ),
+        ),
+        DeclareLaunchArgument(
+            "c_can_topic",
+            default_value="c_can_frame",
+            description="Output topic for CAN frames extracted from c_tc_synced_frame.",
+        ),
+        DeclareLaunchArgument(
+            "l_can_topic",
+            default_value="l_can_frame",
+            description="Output topic for CAN frames extracted from l_tc_synced_frame.",
         ),
         DeclareLaunchArgument(
             "storage_file",
@@ -81,7 +96,6 @@ def generate_launch_description():
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
                 "destination_ids": destination_ids,
-                "handled_frame_types": handled_frame_types,
             }],
         ),
         Node(
@@ -95,7 +109,6 @@ def generate_launch_description():
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
                 "destination_ids": destination_ids,
-                "handled_frame_types": handled_frame_types,
             }],
         ),
         Node(
@@ -109,7 +122,6 @@ def generate_launch_description():
                 "timeout_ms": timeout_ms,
                 "crc8_variant": crc8_variant,
                 "destination_ids": destination_ids,
-                "handled_frame_types": handled_frame_types,
             }],
         ),
         Node(
@@ -150,6 +162,30 @@ def generate_launch_description():
                 "fc_tm_topic": "fc_tm_synced_frame",
                 "c_tc_topic": "c_tc_synced_frame",
                 "l_tc_topic": "l_tc_synced_frame",
+            }],
+        ),
+        Node(
+            package="telemetry_telecommand",
+            executable="c_can_pub",
+            name="c_can_pub",
+            output="screen",
+            parameters=[{
+                "input_topic": "c_tc_synced_frame",
+                "output_topic": c_can_topic,
+                "destination_ids": destination_ids,
+                "handled_frame_types": handled_frame_types,
+            }],
+        ),
+        Node(
+            package="telemetry_telecommand",
+            executable="l_can_pub",
+            name="l_can_pub",
+            output="screen",
+            parameters=[{
+                "input_topic": "l_tc_synced_frame",
+                "output_topic": l_can_topic,
+                "destination_ids": destination_ids,
+                "handled_frame_types": handled_frame_types,
             }],
         ),
     ])

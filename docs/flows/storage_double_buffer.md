@@ -1,6 +1,6 @@
 # 双缓存存储流程
 
-这张图描述 `serial_storage` 如何把 3 路过滤后的 `frame_data` 写入同一个文件。
+这张图描述 `serial_storage` 如何把 3 路已通过目的 ID 过滤的 `frame_data` 写入同一个文件。
 
 ```mermaid
 flowchart TB

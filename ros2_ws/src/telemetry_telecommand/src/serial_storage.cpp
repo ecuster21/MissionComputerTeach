@@ -17,7 +17,7 @@
 #include <interfaces/msg/synced_frame.hpp>
 #include <rclcpp/rclcpp.hpp>
 
-// 将 3 路已经通过同步、CRC 和业务过滤的串口帧合并存储到单个文件。
+// 将 3 路已经通过同步、CRC 和目的 ID 过滤的串口帧合并存储到单个文件。
 // 节点只写 SyncedFrame.frame_data 原始字节，不额外写入话题名或 ROS 时间戳。
 class SerialStorage : public rclcpp::Node
 {

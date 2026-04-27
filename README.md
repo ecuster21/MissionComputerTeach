@@ -1,13 +1,15 @@
 # MissionComputer
 
-基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点、1 个存储节点，以及 1 个用于整套联调的一键启动文件：
+基于 ROS 2 Jazzy 的串口接收工程。当前项目包含 3 个串口接收节点、1 个可视化节点、1 个存储节点、2 个 CAN 提取节点，以及 1 个用于整套联调的一键启动文件：
 
 - `fc_tm_serial_recv`：默认接收 `/dev/ttyS7`，对应 PC 端 `COM1`，固定 `64` 字节帧
 - `c_tc_serial_recv`：默认接收 `/dev/ttyS3`，对应 PC 端 `COM6`，固定 `32` 字节帧
 - `l_tc_serial_recv`：默认接收 `/dev/ttyS4`，对应 PC 端 `COM7`，固定 `32` 字节帧
 - `frame_visualizer`：订阅接收到的完整帧并以十六进制打印
 - `serial_storage`：订阅 3 路过滤后的完整帧，使用两个 4KB 缓冲区按到达顺序写入同一个存储文件
-- `multi_serial_visualizers.launch.py`：同时启动 3 个串口接收节点、3 个对应的可视化节点和 1 个存储节点
+- `c_can_pub`：订阅 `c_tc_synced_frame`，按目的 ID 和帧类型提取 C 链路数据区前两包 CAN 数据并发布
+- `l_can_pub`：订阅 `l_tc_synced_frame`，按目的 ID 和帧类型提取 L 链路数据区前两包 CAN 数据并发布
+- `multi_serial_visualizers.launch.py`：同时启动 3 个串口接收节点、3 个对应的可视化节点、1 个存储节点和 2 个 CAN 提取节点
 
 这 3 个接收节点共用同一套串口同步与 CRC8 校验逻辑，只是默认串口、默认帧长和默认发布话题不同。
 
@@ -52,14 +54,16 @@ source install/setup.bash
 EB 90 + 1字节帧类型 + 1字节源ID + 1字节目的ID + 数据区 + 1字节时间戳 + 1字节CRC8
 ```
 
+数据区当前约定为：第一包 CAN 包 `2字节CANID + 8字节CAN数据`，第二包 CAN 包 `2字节CANID + 8字节CAN数据`，后面是备用字节。
+
 CRC8 计算范围是从帧头 `EB 90` 到 1 字节时间戳为止，不包含最后的 CRC8 字节。
 
-同步和 CRC8 校验通过后，接收节点会继续做业务过滤：
+同步和 CRC8 校验通过后，接收节点只做目的 ID 过滤：
 
 - `destination_id` 必须命中 `destination_ids`
-- `frame_type` 必须命中 `handled_frame_types`
 - `destination_ids` 为空时表示接收任意目的 ID，适合尚未配置本机号的联调阶段
-- `handled_frame_types` 为空时表示接收任意帧类型
+
+通过目的 ID 过滤的完整原始帧会发布到 `*_synced_frame`，供 `serial_storage` 直接写盘。帧类型判断放在后续业务节点里完成，目前 `c_can_pub` 和 `l_can_pub` 使用 `handled_frame_types` 参数处理 `0C,0D,10,11`，为空时表示接收任意帧类型。
 
 不同节点的默认帧长：
 
@@ -74,7 +78,7 @@ CRC8 计算范围是从帧头 `EB 90` 到 1 字节时间戳为止，不包含最
 
 ## 运行
 
-推荐直接使用 launch 文件一次启动 3 路串口接收、3 路显示和 1 路存储。
+推荐直接使用 launch 文件一次启动 3 路串口接收、3 路显示、1 路存储和 2 路 CAN 提取。
 
 ### 一键启动
 
@@ -94,6 +98,8 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py
 - `c_tc_frame_visualizer`，订阅 `c_tc_synced_frame`
 - `l_tc_frame_visualizer`，订阅 `l_tc_synced_frame`
 - `serial_storage`，订阅上述 3 个话题并写入单个存储文件
+- `c_can_pub`，订阅 `c_tc_synced_frame` 并发布 `c_can_frame`
+- `l_can_pub`，订阅 `l_tc_synced_frame` 并发布 `l_can_frame`
 
 如果需要改串口或公共参数，可以直接覆盖 launch 参数：
 
@@ -110,6 +116,8 @@ ros2 launch telemetry_telecommand multi_serial_visualizers.launch.py \
   crc8_variant:=crc8 \
   destination_ids:=1 \
   handled_frame_types:=0C,0D,10,11 \
+  c_can_topic:=c_can_frame \
+  l_can_topic:=l_can_frame \
   storage_file:=serial_storage.bin
 ```
 
@@ -128,12 +136,11 @@ source install/setup.bash
 ros2 run telemetry_telecommand fc_tm_serial_recv
 ```
 
-如果要在手动启动时指定本机号和帧类型：
+如果要在手动启动时指定本机号：
 
 ```bash
 ros2 run telemetry_telecommand fc_tm_serial_recv --ros-args \
-  -p destination_ids:=1 \
-  -p handled_frame_types:=0C,0D,10,11
+  -p destination_ids:=1
 ```
 
 `c_tc_serial_recv`
@@ -175,6 +182,19 @@ ros2 run telemetry_telecommand serial_storage --ros-args \
   -p storage_file:=serial_storage.bin
 ```
 
+如果只启动 CAN 提取节点：
+
+```bash
+cd /home/zkxt/MissionComputer/ros2_ws
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 run telemetry_telecommand c_can_pub --ros-args \
+  -p destination_ids:=1 \
+  -p handled_frame_types:=0C,0D,10,11
+```
+
+`l_can_pub` 的启动方式相同，默认订阅 `l_tc_synced_frame` 并发布 `l_can_frame`。
+
 如果串口权限不足：
 
 ```bash
@@ -211,9 +231,22 @@ sudo usermod -aG dialout $USER
 - `baud_rate`：默认 `115200`
 - `timeout_ms`：默认 `100`
 - `destination_ids`：目的 ID 过滤列表，默认空字符串，表示任意目的 ID
-- `handled_frame_types`：需要处理的帧类型列表，默认 `0C,0D,10,11`
 
-这两个过滤参数支持字符串、单个整数或整数数组。字符串写法中，`destination_ids` 默认按十进制解析，支持用 `0x` 写十六进制；`handled_frame_types` 默认按十六进制解析。多个值可以用逗号、空格或分号分隔，例如 `destination_ids:=1,2,0x24`、`handled_frame_types:=0C,0D,10,11`。整数数组写法可以用 `destination_ids:=[1,2,36]`。注意帧类型 `0D` 的第一位是数字 `0`。
+`c_can_pub`
+
+- `input_topic`：默认 `c_tc_synced_frame`
+- `output_topic`：默认 `c_can_frame`
+- `destination_ids`：目的 ID 过滤列表，默认空字符串，表示任意目的 ID
+- `handled_frame_types`：需要提取 CAN 的帧类型列表，默认 `0C,0D,10,11`
+
+`l_can_pub`
+
+- `input_topic`：默认 `l_tc_synced_frame`
+- `output_topic`：默认 `l_can_frame`
+- `destination_ids`：目的 ID 过滤列表，默认空字符串，表示任意目的 ID
+- `handled_frame_types`：需要提取 CAN 的帧类型列表，默认 `0C,0D,10,11`
+
+过滤参数支持字符串、单个整数或整数数组。字符串写法中，`destination_ids` 默认按十进制解析，支持用 `0x` 写十六进制；`handled_frame_types` 默认按十六进制解析。多个值可以用逗号、空格或分号分隔，例如 `destination_ids:=1,2,0x24`、`handled_frame_types:=0C,0D,10,11`。整数数组写法可以用 `destination_ids:=[1,2,36]`。注意帧类型 `0D` 的第一位是数字 `0`。
 
 `frame_visualizer` 支持：
 
@@ -239,6 +272,8 @@ sudo usermod -aG dialout $USER
 - `crc8_variant`：默认 `crc8`
 - `destination_ids`：默认空字符串
 - `handled_frame_types`：默认 `0C,0D,10,11`
+- `c_can_topic`：默认 `c_can_frame`
+- `l_can_topic`：默认 `l_can_frame`
 - `storage_file`：默认 `serial_storage.bin`
 - `truncate_storage_file`：默认 `true`
 
@@ -249,7 +284,14 @@ sudo usermod -aG dialout $USER
 - `frame_data`：完整原始帧，长度由对应节点决定
 - `timestamp_ns`：本地接收时间戳，单位纳秒，不是串口帧内的 1 字节协议时间戳
 
-`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。完整原始帧中包含 CRC 前的 1 字节协议时间戳。只有通过目的 ID 和帧类型过滤的帧会被发布。
+`frame_data` 已改成变长数组，因此可以同时承载 `64` 字节和 `32` 字节帧。完整原始帧中包含 CRC 前的 1 字节协议时间戳。接收节点只发布通过目的 ID 过滤的完整原始帧。
+
+消息类型：`interfaces/msg/CanFrame`
+
+- `id`：2 字节 CANID，消息字段类型为 `int16`
+- `data`：8 字节 CAN 数据
+
+`c_can_pub` 和 `l_can_pub` 会从数据区前 20 字节提取两包 CAN 数据，每收到 1 个符合目的 ID 和帧类型的串口完整帧，就发布 2 条 `CanFrame` 消息。
 
 ## 常见问题
 
@@ -279,4 +321,5 @@ Frame validation failed.
 - 串口底层使用仓库内置的 POSIX `termios` 封装
 - 3 个接收节点都复用了同一个 `FixedFrameSerialReceiver`
 - 接收线程采用“搜索双帧头建立同步 -> 固定帧长取帧 -> 校验失败重同步”的方式工作
+- CAN 提取节点在 `*_synced_frame` 之后执行目的 ID 和帧类型过滤，并从数据区前两包 CAN 中发布 `CanFrame`
 - 存储节点 `serial_storage` 采用双 4KB 缓冲区和后台写盘线程，将 3 路过滤后的 `frame_data` 合并写入单个文件

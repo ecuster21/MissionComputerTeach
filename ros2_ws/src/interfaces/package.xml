@@ -8,7 +8,7 @@
 
   <!-- 使用 ament_cmake 构建该接口包。 -->
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <!-- 为 SyncedFrame.msg 生成 C/C++/Python 等语言的消息代码。 -->
+  <!-- 为 SyncedFrame.msg 和 CanFrame.msg 生成 C/C++/Python 等语言的消息代码。 -->
   <build_depend>rosidl_default_generators</build_depend>
   <!-- 在运行时提供生成后的接口定义。 -->
   <exec_depend>rosidl_default_runtime</exec_depend>

@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TB
-    A[节点启动] --> B[声明参数<br/>port / baud_rate / frame_length / crc8_variant / destination_ids / handled_frame_types / topic]
+    A[节点启动] --> B[声明参数<br/>port / baud_rate / frame_length / crc8_variant / destination_ids / topic]
     B --> C[打开并配置串口<br/>115200 8N1 raw]
     C --> D{串口打开成功?}
     D -- 否 --> E[等待后重试]
@@ -23,7 +23,7 @@ flowchart TB
     K --> L
 
     L --> M{帧头正确且 CRC8 正确?}
-    M -- 是 --> N{destination_id 和 frame_type<br/>是否需要本机处理?}
+    M -- 是 --> N{destination_id<br/>是否匹配本机号?}
     N -- 是 --> O[发布 SyncedFrame]
     N -- 否 --> P[忽略该帧<br/>保持同步]
     O --> Q[继续下一帧]
@@ -40,5 +40,5 @@ flowchart TB
 
 ## 保留这个图的原因
 
-- 它覆盖了原来分散在多张图里的同步、校验、过滤和重同步逻辑。
+- 它覆盖了原来分散在多张图里的同步、校验、目的 ID 过滤和重同步逻辑。
 - 双帧头同步是当前接收逻辑最容易误解的部分，保留为主图更便于维护。

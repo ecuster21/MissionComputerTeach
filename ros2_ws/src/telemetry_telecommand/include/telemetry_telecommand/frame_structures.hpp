@@ -13,11 +13,16 @@ namespace telemetry_telecommand
 constexpr std::array<uint8_t, 2> FRAME_HEADER{0xEB, 0x90};
 constexpr std::size_t FRAME_CRC8_LENGTH = 1;
 constexpr std::size_t FRAME_PROTOCOL_TIMESTAMP_LENGTH = 1;
-// 帧头之后依次是帧类型、源 ID、目的 ID；这些偏移用于过滤有效帧。
+// 帧头之后依次是帧类型、源 ID、目的 ID；这些偏移用于目的 ID 判断和业务解析。
 constexpr std::size_t FRAME_TYPE_OFFSET = FRAME_HEADER.size();
 constexpr std::size_t FRAME_SOURCE_ID_OFFSET = FRAME_TYPE_OFFSET + 1;
 constexpr std::size_t FRAME_DESTINATION_ID_OFFSET = FRAME_SOURCE_ID_OFFSET + 1;
 constexpr std::size_t FRAME_ROUTE_FIELDS_LENGTH = 3;
+constexpr std::size_t FRAME_DATA_OFFSET = FRAME_HEADER.size() + FRAME_ROUTE_FIELDS_LENGTH;
+constexpr std::size_t CAN_ID_LENGTH = 2;
+constexpr std::size_t CAN_DATA_LENGTH = 8;
+constexpr std::size_t CAN_PACKET_LENGTH = CAN_ID_LENGTH + CAN_DATA_LENGTH;
+constexpr std::size_t CAN_PACKETS_PER_SERIAL_FRAME = 2;
 // 当前三路串口的固定总帧长：飞控遥测 64 字节，遥控/指令类 32 字节。
 constexpr std::size_t FC_TM_FRAME_LENGTH = 64;
 constexpr std::size_t TC_FRAME_LENGTH = 32;
@@ -139,6 +144,11 @@ inline uint8_t destination_id(const uint8_t * data)
 inline uint8_t protocol_timestamp(const uint8_t * data, std::size_t frame_length)
 {
   return data[protocol_timestamp_offset_for(frame_length)];
+}
+
+inline std::size_t can_packet_offset(std::size_t packet_index)
+{
+  return FRAME_DATA_OFFSET + packet_index * CAN_PACKET_LENGTH;
 }
 
 inline uint8_t calculate_crc8(

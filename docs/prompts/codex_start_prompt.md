@@ -11,8 +11,8 @@
 - 项目名：MissionComputer
 - 技术栈：ROS 2 Jazzy、C++17、ament_cmake、colcon
 - 工作区：ros2_ws
-- 当前核心节点：fc_tm_serial_recv、c_tc_serial_recv、l_tc_serial_recv、frame_visualizer、serial_storage
-- 当前协议：帧头 EB 90，随后是帧类型、源 ID、目的 ID、数据区、1 字节协议时间戳、CRC8，固定帧长（64 或 32 字节），并按目的 ID 和帧类型过滤
+- 当前核心节点：fc_tm_serial_recv、c_tc_serial_recv、l_tc_serial_recv、frame_visualizer、serial_storage、c_can_pub、l_can_pub
+- 当前协议：帧头 EB 90，随后是帧类型、源 ID、目的 ID、数据区、1 字节协议时间戳、CRC8，固定帧长（64 或 32 字节）；接收节点按目的 ID 过滤，CAN 提取节点再按目的 ID 和帧类型过滤
 - 相关专题文档在 docs/，流程图说明在 docs/flows/
 
 本轮目标：

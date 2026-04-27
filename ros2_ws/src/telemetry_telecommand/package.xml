@@ -11,7 +11,7 @@
 
   <!-- 发布与订阅节点共用的自定义帧消息。 -->
   <depend>interfaces</depend>
-  <!-- 接收节点和可视化节点依赖的 ROS 2 客户端库。 -->
+  <!-- 接收、可视化、存储和 CAN 提取节点依赖的 ROS 2 客户端库。 -->
   <depend>rclcpp</depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

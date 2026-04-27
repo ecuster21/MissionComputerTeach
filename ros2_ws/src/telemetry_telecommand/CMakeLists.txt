@@ -29,6 +29,19 @@ ament_target_dependencies(serial_support
   rclcpp
 )
 
+# CAN 提取节点共用逻辑：订阅完整串口帧，按目的 ID 和帧类型提取两包 CAN 数据。
+add_library(can_publisher_support
+  src/can_frame_publisher.cpp
+)
+target_include_directories(can_publisher_support
+  PUBLIC
+    include
+)
+ament_target_dependencies(can_publisher_support
+  interfaces
+  rclcpp
+)
+
 add_executable(fc_tm_serial_recv
   src/fc_tm_serial_recv.cpp
 )
@@ -93,13 +106,42 @@ ament_target_dependencies(serial_storage
   rclcpp
 )
 
+add_executable(c_can_pub
+  src/c_can_pub.cpp
+)
+target_include_directories(c_can_pub
+  PRIVATE
+    include
+)
+ament_target_dependencies(c_can_pub
+  interfaces
+  rclcpp
+)
+target_link_libraries(c_can_pub can_publisher_support)
+
+add_executable(l_can_pub
+  src/l_can_pub.cpp
+)
+target_include_directories(l_can_pub
+  PRIVATE
+    include
+)
+ament_target_dependencies(l_can_pub
+  interfaces
+  rclcpp
+)
+target_link_libraries(l_can_pub can_publisher_support)
+
 install(TARGETS
   serial_support
+  can_publisher_support
   fc_tm_serial_recv
   c_tc_serial_recv
   l_tc_serial_recv
   frame_visualizer
   serial_storage
+  c_can_pub
+  l_can_pub
   DESTINATION lib/${PROJECT_NAME}
 )
 

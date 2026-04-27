@@ -34,10 +34,10 @@ private:
   bool initialize_serial();
   void close_serial();
   void receive_data();
-  // CRC 通过后再做业务过滤：目的 ID 命中本机号，帧类型属于待处理集合。
+  // CRC 通过后再做业务过滤：目的 ID 命中本机号即可发布完整原始帧。
   bool should_process_frame(const std::vector<uint8_t> & frame) const;
   void publish_frame(const std::vector<uint8_t> & frame);
-  // 支持运行时调整目的 ID 和帧类型过滤表，便于联调中增减机号或协议类型。
+  // 支持运行时调整目的 ID 过滤表，便于联调中增减机号。
   rcl_interfaces::msg::SetParametersResult handle_parameter_update(
     const std::vector<rclcpp::Parameter> & parameters);
 
@@ -49,9 +49,8 @@ private:
   std::size_t search_buffer_size_;
   std::string crc8_variant_name_;
   Crc8Config crc8_config_{CRC8_STANDARD};
-  // 空列表表示不过滤该字段；非空时只允许列表中的字节值通过。
+  // 空列表表示不过滤目的 ID；非空时只允许列表中的机号通过。
   std::vector<uint8_t> destination_ids_;
-  std::vector<uint8_t> handled_frame_types_;
   // 接收线程读取过滤表，参数回调写入过滤表，两边用同一把锁保护。
   mutable std::mutex filter_mutex_;
   rclcpp::Publisher<interfaces::msg::SyncedFrame>::SharedPtr frame_publisher_;

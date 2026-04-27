@@ -186,3 +186,66 @@
 ### 下一步做什么
 
 - 后续新增文档时，优先判断是否能归入 `flows/` 或 `prompts/`，避免过早拆分目录
+
+## 2026-04-27
+
+### 这次做了什么
+
+- 将串口接收层调整为同步和 CRC8 通过后只按目的 ID 过滤，符合本机号就发布完整原始帧
+- 新增 `interfaces/msg/CanFrame.msg`
+- 新增 `c_can_pub` 和 `l_can_pub`，订阅 C/L 链路完整帧，按目的 ID 与可配置帧类型过滤后提取两包 CAN 数据并发布
+- 将 CAN 提取节点接入 CMake 和 `multi_serial_visualizers.launch.py`
+- 同步更新 README、Memory 和 docs 流程说明
+- 完成构建、接口、launch 参数和 `c_can_pub` 话题级冒烟测试
+
+### 改了哪些文件
+
+- `README.md`
+- `Memory.md`
+- `Log.md`
+- `docs/README.md`
+- `docs/flows/README.md`
+- `docs/flows/serial_pipeline.md`
+- `docs/flows/receiver_sync.md`
+- `docs/flows/storage_double_buffer.md`
+- `docs/prompts/codex_start_prompt.md`
+- `ros2_ws/src/interfaces/CMakeLists.txt`
+- `ros2_ws/src/interfaces/package.xml`
+- `ros2_ws/src/interfaces/msg/CanFrame.msg`
+- `ros2_ws/src/telemetry_telecommand/CMakeLists.txt`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/can_frame_publisher.hpp`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/fixed_frame_serial_receiver.hpp`
+- `ros2_ws/src/telemetry_telecommand/include/telemetry_telecommand/frame_structures.hpp`
+- `ros2_ws/src/telemetry_telecommand/launch/multi_serial_visualizers.launch.py`
+- `ros2_ws/src/telemetry_telecommand/package.xml`
+- `ros2_ws/src/telemetry_telecommand/src/c_can_pub.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/can_frame_publisher.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/fixed_frame_serial_receiver.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/l_can_pub.cpp`
+
+### 下一步做什么
+
+- 联调时根据本机号设置 `destination_ids`，根据业务帧类型维护 `handled_frame_types`
+- 如果后续 CANID 需要按无符号 `0..65535` 显示，建议把 `CanFrame.msg` 的 `id` 从 `int16` 调整为 `uint16`
+
+## 2026-04-29
+
+### 这次做了什么
+
+- 将 `CanFrame.msg` 的 `id` 从 `int8` 改为 `int16`，用于承载 2 字节 CANID
+- 将 `c_can_pub` 和 `l_can_pub` 的 CANID 发布逻辑改为发布完整 2 字节 CANID，不再只发布低 8 位
+- 复核 `serial_storage`，确认它仍订阅 `fc_tm_synced_frame`、`c_tc_synced_frame`、`l_tc_synced_frame`，只写 `SyncedFrame.frame_data` 原始帧字节
+- 将存储节点注释中的过滤描述修正为目的 ID 过滤
+- 完成构建、接口检查和 `c_can_pub` 冒烟测试，确认 CANID `0x0123` 发布为 `291`
+
+### 改了哪些文件
+
+- `README.md`
+- `Log.md`
+- `ros2_ws/src/interfaces/msg/CanFrame.msg`
+- `ros2_ws/src/telemetry_telecommand/src/can_frame_publisher.cpp`
+- `ros2_ws/src/telemetry_telecommand/src/serial_storage.cpp`
+
+### 下一步做什么
+
+- 联调时继续确认实际 CANID 字节序；当前按高字节在前解析
