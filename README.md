@@ -280,3 +280,7 @@ Frame validation failed.
 - 3 个接收节点都复用了同一个 `FixedFrameSerialReceiver`
 - 接收线程采用“搜索双帧头建立同步 -> 固定帧长取帧 -> 校验失败重同步”的方式工作
 - 存储节点 `serial_storage` 采用双 4KB 缓冲区和后台写盘线程，将 3 路过滤后的 `frame_data` 合并写入单个文件
+
+
+
+对话在Add serial CRC frame sender中

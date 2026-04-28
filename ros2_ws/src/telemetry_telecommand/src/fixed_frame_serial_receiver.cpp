@@ -317,8 +317,8 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     this->declare_parameter<int>("frame_length", static_cast<int>(default_frame_length)));
   const auto requested_crc8_variant =
     this->declare_parameter<std::string>("crc8_variant", "crc8");
-  rcl_interfaces::msg::ParameterDescriptor flexible_byte_list_descriptor;
-  flexible_byte_list_descriptor.dynamic_typing = true;
+  rcl_interfaces::msg::ParameterDescriptor flexible_byte_list_descriptor; // 允许多种输入格式的字节列表参数，内部统一解析成 uint8_t vector。
+  flexible_byte_list_descriptor.dynamic_typing = true; 
   flexible_byte_list_descriptor.description =
     "Byte list as string, integer, or integer array.";
   this->declare_parameter(
@@ -331,7 +331,7 @@ FixedFrameSerialReceiver::FixedFrameSerialReceiver(
     flexible_byte_list_descriptor);
   const auto topic_name = this->declare_parameter<std::string>("topic", default_topic);
 
-  // 当前协议要求 CRC 前至少有协议时间戳，避免配置出过短帧导致越界解析。
+  // 协议要求，避免配置出过短帧导致越界解析。
   if (frame_length_ < minimum_frame_length()) {
     throw std::invalid_argument(
       "frame_length must contain header + frame_type + source_id + destination_id + "
